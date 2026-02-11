@@ -188,7 +188,12 @@ test('MVP-002: purchase-allowed timestamp is rendered in browser locale from dat
 test('MVP-004: profile hourly wage shows as value after save and can be edited', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByLabel('Netto-Stundenlohn').fill('31.5');
+  const hourlyWageInput = page.getByLabel('Netto-Stundenlohn');
+  if (!(await hourlyWageInput.isVisible())) {
+    await page.getByRole('button', { name: 'Edit' }).click();
+  }
+
+  await hourlyWageInput.fill('31.5');
   await page.getByRole('button', { name: 'Profil speichern' }).click();
 
   await expect(page.getByRole('status')).toContainText('Profil gespeichert.');
@@ -197,7 +202,7 @@ test('MVP-004: profile hourly wage shows as value after save and can be edited',
   await expect(page.locator('#profile-edit-form')).toHaveCount(0);
   await expect(page.locator('#profile-save-btn')).toHaveCount(0);
 
-  await page.getByRole('link', { name: 'Edit' }).click();
+  await page.getByRole('button', { name: 'Edit' }).click();
   await expect(page.getByLabel('Netto-Stundenlohn')).toHaveValue('31.5');
   await expect(page.getByRole('button', { name: 'Profil speichern' })).toBeVisible();
 
@@ -210,7 +215,7 @@ test('MVP-004: profile hourly wage shows as value after save and can be edited',
 test('MVP-004: profile validates invalid hourly wage', async ({ page }) => {
   await page.goto('/');
 
-  const editButton = page.getByRole('link', { name: 'Edit' });
+  const editButton = page.getByRole('button', { name: 'Edit' });
   if (await editButton.isVisible()) {
     await editButton.click();
   }

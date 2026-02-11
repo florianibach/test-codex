@@ -97,7 +97,10 @@
         <div id="profile-read-view" class="vstack gap-3">
           <p class="mb-0"><span class="text-secondary">Netto-Stundenlohn:</span> <strong id="hourly-wage-value">{{.ProfileHourly}}</strong></p>
           <div>
-            <a id="profile-edit-btn" class="btn btn-outline-primary" href="/?edit_profile=1">Edit</a>
+            <form method="get" action="/" class="d-inline">
+              <input type="hidden" name="edit_profile" value="1" />
+              <button id="profile-edit-btn" class="btn btn-outline-primary" type="submit">Edit</button>
+            </form>
           </div>
         </div>
         {{end}}
