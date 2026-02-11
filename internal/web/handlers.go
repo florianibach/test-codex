@@ -3,6 +3,7 @@ package web
 import (
 	"embed"
 	"html/template"
+	"io/fs"
 	"log"
 	"net/http"
 	"strings"
@@ -12,6 +13,9 @@ import (
 
 //go:embed templates/*.html
 var templateFS embed.FS
+
+//go:embed static/*
+var staticFS embed.FS
 
 type Item struct {
 	Title     string
@@ -52,6 +56,12 @@ func NewApp() *App {
 }
 
 func (a *App) routes() {
+	staticFiles, err := fs.Sub(staticFS, "static")
+	if err != nil {
+		panic(err)
+	}
+
+	a.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFiles))))
 	a.mux.HandleFunc("/", a.home)
 	a.mux.HandleFunc("/healthz", a.health)
 	a.mux.HandleFunc("/about", a.about)

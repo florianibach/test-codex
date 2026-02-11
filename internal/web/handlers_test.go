@@ -20,6 +20,37 @@ func TestHomeRoute(t *testing.T) {
 	}
 }
 
+func TestHomeUsesLocalStylesheet(t *testing.T) {
+	app := NewApp()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	body := rr.Body.String()
+	if strings.Contains(body, "cdn.jsdelivr.net") {
+		t.Fatalf("expected home page to avoid external stylesheet dependency")
+	}
+	if !strings.Contains(body, "href=\"/static/bootstrap.min.css\"") {
+		t.Fatalf("expected home page to load local bootstrap stylesheet")
+	}
+}
+
+func TestBootstrapStylesheetRoute(t *testing.T) {
+	app := NewApp()
+	req := httptest.NewRequest(http.MethodGet, "/static/bootstrap.min.css", nil)
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if contentType := rr.Header().Get("Content-Type"); !strings.Contains(contentType, "text/css") {
+		t.Fatalf("expected CSS content type, got %q", contentType)
+	}
+}
+
 func TestCreateItemWithOnlyTitle(t *testing.T) {
 	app := NewApp()
 	form := url.Values{}
