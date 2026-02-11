@@ -131,6 +131,7 @@ test('reality check shows work hours and updates after wage change', async ({ pa
 
   await page.goto('/items/new');
   await page.getByLabel('Title *').fill(title);
+  await page.locator('details summary').click();
   await page.getByLabel('Price').fill('100');
   await page.getByRole('button', { name: 'Add to waitlist' }).click();
 
