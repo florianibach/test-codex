@@ -464,6 +464,78 @@ func TestParseHourlyWage(t *testing.T) {
 	}
 }
 
+func TestHomeShowsDashboardInsights(t *testing.T) {
+	app := NewApp()
+
+	app.mu.Lock()
+	app.items = append(app.items,
+		Item{ID: 1, Title: "Keyboard", Price: "99.99", PriceValue: 99.99, HasPriceValue: true, Tags: "Tech, Desk", Status: "Skipped", PurchaseAllowedAt: time.Now().Add(-time.Hour)},
+		Item{ID: 2, Title: "Mouse", Price: "50", PriceValue: 50, HasPriceValue: true, Tags: "tech", Status: "Skipped", PurchaseAllowedAt: time.Now().Add(-time.Hour)},
+		Item{ID: 3, Title: "Shoes", Price: "120", PriceValue: 120, HasPriceValue: true, Tags: "Fashion", Status: "Bought", PurchaseAllowedAt: time.Now().Add(-time.Hour)},
+	)
+	app.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "Skipped items") || !strings.Contains(body, ">2<") {
+		t.Fatalf("expected skipped items metric")
+	}
+	if !strings.Contains(body, "Saved total") || !strings.Contains(body, "149.99") {
+		t.Fatalf("expected saved total metric")
+	}
+	if !strings.Contains(body, "tech (2)") {
+		t.Fatalf("expected aggregated top category")
+	}
+}
+
+func TestHomeShowsInsightsZeroStateWhenNoItems(t *testing.T) {
+	app := NewApp()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if body := rr.Body.String(); !strings.Contains(body, "No data yet. Add items and make decisions to unlock insights.") {
+		t.Fatalf("expected dashboard zero state")
+	}
+}
+
+func TestBuildDashboardStatsSortsAndLimitsCategories(t *testing.T) {
+	items := []Item{
+		{Tags: "gamma"},
+		{Tags: "alpha"},
+		{Tags: "beta"},
+		{Tags: "alpha"},
+		{Tags: "delta"},
+		{Tags: "beta"},
+		{Tags: "beta"},
+		{Tags: "delta"},
+	}
+
+	_, _, categories := buildDashboardStats(items)
+
+	if len(categories) != 3 {
+		t.Fatalf("expected top 3 categories, got %d", len(categories))
+	}
+	if categories[0].Name != "beta" || categories[0].Count != 3 {
+		t.Fatalf("unexpected top category: %+v", categories[0])
+	}
+	if categories[1].Name != "alpha" || categories[1].Count != 2 {
+		t.Fatalf("unexpected second category: %+v", categories[1])
+	}
+	if categories[2].Name != "delta" || categories[2].Count != 2 {
+		t.Fatalf("unexpected third category: %+v", categories[2])
+	}
+}
 func TestHealthRoute(t *testing.T) {
 	app := NewApp()
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)

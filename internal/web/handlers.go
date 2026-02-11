@@ -42,6 +42,14 @@ type homeViewData struct {
 	Items           []Item
 	HourlyWage      float64
 	HasHourlyWage   bool
+	SkippedCount    int
+	SavedAmount     float64
+	TopCategories   []categoryCount
+}
+
+type categoryCount struct {
+	Name  string
+	Count int
 }
 
 type itemFormViewData struct {
@@ -322,6 +330,7 @@ func (a *App) renderHome(w http.ResponseWriter, data homeViewData) {
 	a.mu.Lock()
 	a.promoteReadyItemsLocked(time.Now())
 	data.Items = append([]Item(nil), a.items...)
+	data.SkippedCount, data.SavedAmount, data.TopCategories = buildDashboardStats(data.Items)
 	if parsedWage, err := parseHourlyWage(a.hourlyWage); err == nil {
 		data.HourlyWage = parsedWage
 		data.HasHourlyWage = true
@@ -402,6 +411,64 @@ func formatWorkHours(item Item, hourlyWage float64) string {
 	hours := price / hourlyWage
 	roundedHours := math.Round(hours*10) / 10
 	return fmt.Sprintf("%.1f", roundedHours)
+}
+
+func buildDashboardStats(items []Item) (skippedCount int, savedAmount float64, topCategories []categoryCount) {
+	categoryTotals := map[string]int{}
+
+	for _, item := range items {
+		if item.Status == "Skipped" {
+			skippedCount++
+			if item.HasPriceValue {
+				savedAmount += item.PriceValue
+			}
+		}
+
+		for _, category := range categoriesFromTags(item.Tags) {
+			categoryTotals[category]++
+		}
+	}
+
+	for category, count := range categoryTotals {
+		topCategories = append(topCategories, categoryCount{Name: category, Count: count})
+	}
+
+	slices.SortFunc(topCategories, func(a, b categoryCount) int {
+		if a.Count != b.Count {
+			return b.Count - a.Count
+		}
+		return strings.Compare(a.Name, b.Name)
+	})
+
+	if len(topCategories) > 3 {
+		topCategories = topCategories[:3]
+	}
+
+	return skippedCount, savedAmount, topCategories
+}
+
+func categoriesFromTags(rawTags string) []string {
+	if strings.TrimSpace(rawTags) == "" {
+		return nil
+	}
+
+	parts := strings.Split(rawTags, ",")
+	seen := map[string]struct{}{}
+	var categories []string
+
+	for _, part := range parts {
+		category := strings.ToLower(strings.TrimSpace(part))
+		if category == "" {
+			continue
+		}
+		if _, exists := seen[category]; exists {
+			continue
+		}
+		seen[category] = struct{}{}
+		categories = append(categories, category)
+	}
+
+	return categories
 }
 
 func statusBadgeClass(status string) string {
