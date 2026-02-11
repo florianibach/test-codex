@@ -20,7 +20,7 @@ Die App hilft Nutzer:innen dabei, spontane Käufe bewusster zu entscheiden, inde
 
 ## 3) MVP – User Stories (priorisiert, klein geschnitten)
 
-### MVP-001 — Item minimal anlegen (mobile-first Add-Flow)
+### (done) MVP-001 — Item minimal anlegen (mobile-first Add-Flow) 
 **User Story**  
 Als Käufer:in möchte ich ein Item mit minimalen Eingaben sehr schnell erfassen, damit ich Impulskäufe sofort in die Warteliste umleiten kann.
 
