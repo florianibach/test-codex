@@ -98,7 +98,7 @@ Als Nutzer:in möchte ich meinen Netto-Stundenwert einmalig konfigurieren, damit
 
 ---
 
-### MVP-005 — Reality-Check: Arbeitsstunden pro Item
+### (done) MVP-005 — Reality-Check: Arbeitsstunden pro Item
 **User Story**  
 Als Käufer:in möchte ich pro Item sehen, wie viele Arbeitsstunden der Preis entspricht, damit ich Kaufentscheidungen realistischer treffe.
 
