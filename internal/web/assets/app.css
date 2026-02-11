@@ -111,6 +111,8 @@ textarea.form-control { resize: vertical; }
   font-weight: 600;
   border-radius: .375rem;
 }
+.text-bg-primary { color: #fff; background: var(--primary); }
+.text-bg-success { color: #fff; background: #198754; }
 .text-bg-secondary { color: #fff; background: #6c757d; }
 .text-bg-warning { color: #212529; background: var(--warning); }
 
