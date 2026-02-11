@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -15,6 +16,12 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
+
+	baseURL := os.Getenv("DASHBOARD_URL")
+	if baseURL == "" {
+		baseURL = fmt.Sprintf("http://localhost:%s", port)
+	}
+	app.SetDashboardURL(baseURL)
 
 	addr := ":" + port
 	log.Printf("starting server on %s", addr)
