@@ -53,12 +53,12 @@ test('exploratory smoke suite: navigation, console, and HTTP errors', async ({ p
   });
 
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Impulse Pause' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Waitlist dashboard' })).toBeVisible();
 
   await page.getByRole('link', { name: 'About' }).click();
   await expect(page.getByRole('heading', { name: 'About' })).toBeVisible();
 
-  await page.getByRole('link', { name: 'Back' }).click();
+  await page.getByRole('link', { name: 'Dashboard' }).click();
   await expect(page).toHaveURL(/\/$/);
 
   await page.getByRole('link', { name: 'Settings' }).click();
