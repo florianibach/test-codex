@@ -477,6 +477,58 @@ func TestProfileRouteMethodNotAllowed(t *testing.T) {
 	}
 }
 
+func TestProfileUsesReadViewAfterSaving(t *testing.T) {
+	app := NewApp()
+	form := url.Values{}
+	form.Set("hourly_wage", "30")
+
+	req := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "id=\"profile-read-view\"") {
+		t.Fatalf("expected profile read view to be rendered")
+	}
+	if !strings.Contains(body, "<strong id=\"hourly-wage-value\">30</strong>") {
+		t.Fatalf("expected saved hourly wage value in read view")
+	}
+	if !strings.Contains(body, "id=\"profile-edit-btn\"") {
+		t.Fatalf("expected edit button in read view")
+	}
+	if !strings.Contains(body, "id=\"profile-edit-form\"") || !strings.Contains(body, "hidden") {
+		t.Fatalf("expected profile edit form to be hidden after saving")
+	}
+}
+
+func TestProfileValidationKeepsEditMode(t *testing.T) {
+	app := NewApp()
+	form := url.Values{}
+	form.Set("hourly_wage", "0")
+
+	req := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+
+	body := rr.Body.String()
+	if strings.Contains(body, "id=\"profile-edit-form\" method=\"post\" action=\"/profile\" class=\"vstack gap-3\" hidden") {
+		t.Fatalf("expected profile edit form to remain visible on validation error")
+	}
+	if !strings.Contains(body, "id=\"profile-read-view\" class=\"vstack gap-3\" hidden") {
+		t.Fatalf("expected read view to be hidden on validation error")
+	}
+}
+
 func TestParseHourlyWage(t *testing.T) {
 	tests := []struct {
 		name            string

@@ -185,17 +185,24 @@ test('MVP-002: purchase-allowed timestamp is rendered in browser locale from dat
 });
 
 
-test('MVP-004: profile hourly wage can be saved and remains visible', async ({ page }) => {
+test('MVP-004: profile hourly wage shows as value after save and can be edited', async ({ page }) => {
   await page.goto('/');
 
   await page.getByLabel('Netto-Stundenlohn').fill('31.5');
   await page.getByRole('button', { name: 'Profil speichern' }).click();
 
   await expect(page.getByRole('status')).toContainText('Profil gespeichert.');
+  await expect(page.locator('#hourly-wage-value')).toHaveText('31.5');
+  await expect(page.getByRole('button', { name: 'Edit' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Profil speichern' })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Edit' }).click();
   await expect(page.getByLabel('Netto-Stundenlohn')).toHaveValue('31.5');
+  await expect(page.getByRole('button', { name: 'Profil speichern' })).toBeVisible();
 
   await page.reload();
-  await expect(page.getByLabel('Netto-Stundenlohn')).toHaveValue('31.5');
+  await expect(page.locator('#hourly-wage-value')).toHaveText('31.5');
+  await expect(page.getByRole('button', { name: 'Profil speichern' })).toHaveCount(0);
 });
 
 test('MVP-004: profile validates invalid hourly wage', async ({ page }) => {

@@ -85,12 +85,19 @@
         <div class="alert alert-success py-2" role="status">{{.ProfileFeedback}}</div>
         {{end}}
 
-        <form method="post" action="/profile" class="vstack gap-3">
+        <div id="profile-read-view" class="vstack gap-3" {{if or (eq .ProfileHourly "") .ProfileError}}hidden{{end}}>
+          <p class="mb-0"><span class="text-secondary">Netto-Stundenlohn:</span> <strong id="hourly-wage-value">{{.ProfileHourly}}</strong></p>
+          <div>
+            <button id="profile-edit-btn" class="btn btn-outline-primary" type="button">Edit</button>
+          </div>
+        </div>
+
+        <form id="profile-edit-form" method="post" action="/profile" class="vstack gap-3" {{if and (ne .ProfileHourly "") (not .ProfileError)}}hidden{{end}}>
           <div>
             <label for="hourly_wage" class="form-label">Netto-Stundenlohn</label>
             <input id="hourly_wage" name="hourly_wage" type="number" min="0.01" step="0.01" inputmode="decimal" class="form-control" placeholder="z. B. 25" value="{{.ProfileHourly}}" required />
           </div>
-          <button class="btn btn-outline-primary" type="submit">Profil speichern</button>
+          <button id="profile-save-btn" class="btn btn-outline-primary" type="submit">Profil speichern</button>
         </form>
       </div>
     </section>
@@ -159,6 +166,21 @@
         waitPreset.addEventListener("change", syncCustomHoursVisibility);
       }
       syncCustomHoursVisibility();
+
+      var profileReadView = document.getElementById("profile-read-view");
+      var profileEditForm = document.getElementById("profile-edit-form");
+      var profileEditButton = document.getElementById("profile-edit-btn");
+      var hourlyWageInput = document.getElementById("hourly_wage");
+
+      if (profileReadView && profileEditForm && profileEditButton) {
+        profileEditButton.addEventListener("click", function () {
+          profileReadView.hidden = true;
+          profileEditForm.hidden = false;
+          if (hourlyWageInput) {
+            hourlyWageInput.focus();
+          }
+        });
+      }
 
       var formatter = new Intl.DateTimeFormat(navigator.language, {
         day: "2-digit",
