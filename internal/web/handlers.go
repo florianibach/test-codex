@@ -1,6 +1,7 @@
 package web
 
 import (
+	"database/sql"
 	"embed"
 	"errors"
 	"fmt"
@@ -94,6 +95,7 @@ type pageData struct {
 type App struct {
 	templates    *template.Template
 	mux          *http.ServeMux
+	db           *sql.DB
 	mu           sync.RWMutex
 	items        []Item
 	hourlyWage   string
@@ -104,6 +106,28 @@ type App struct {
 }
 
 func NewApp() *App {
+	app, err := newAppWithDB(nil)
+	if err != nil {
+		panic(err)
+	}
+	return app
+}
+
+func NewAppWithSQLite(dbPath string) (*App, error) {
+	db, err := openSQLite(dbPath)
+	if err != nil {
+		return nil, err
+	}
+
+	app, err := newAppWithDB(db)
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	return app, nil
+}
+
+func newAppWithDB(db *sql.DB) (*App, error) {
 	tpls := template.Must(template.New("").Funcs(template.FuncMap{
 		"statusBadgeClass":   statusBadgeClass,
 		"workHoursAvailable": workHoursAvailable,
@@ -111,11 +135,14 @@ func NewApp() *App {
 	}).ParseFS(embeddedFiles, "templates/*.html"))
 	mux := http.NewServeMux()
 
-	app := &App{templates: tpls, mux: mux, nextID: 1}
+	app := &App{templates: tpls, mux: mux, db: db, nextID: 1}
+	if err := app.loadStateFromDB(); err != nil {
+		return nil, err
+	}
 	app.routes()
 	app.StartBackgroundPromotion(5 * time.Second)
 
-	return app
+	return app, nil
 }
 
 func (a *App) routes() {
@@ -254,8 +281,12 @@ func (a *App) createItem(w http.ResponseWriter, r *http.Request) {
 	item.PurchaseAllowedAt = item.CreatedAt.Add(waitDuration)
 
 	a.mu.Lock()
-	item.ID = a.nextID
-	a.nextID++
+	if err := a.insertItemLocked(&item); err != nil {
+		a.mu.Unlock()
+		log.Printf("db error while creating item: %v", err)
+		http.Error(w, "could not save item", http.StatusInternalServerError)
+		return
+	}
 	a.items = append([]Item{item}, a.items...)
 	a.mu.Unlock()
 
@@ -331,6 +362,12 @@ func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 	a.hourlyWage = hourlyWage
 	a.ntfyURL = ntfyURL
 	a.ntfyTopic = ntfyTopic
+	if err := a.persistProfileLocked(); err != nil {
+		a.mu.Unlock()
+		log.Printf("db error while saving profile: %v", err)
+		http.Error(w, "could not save profile", http.StatusInternalServerError)
+		return
+	}
 	a.mu.Unlock()
 
 	http.Redirect(w, r, "/settings/profile?saved=1", http.StatusSeeOther)
@@ -375,6 +412,11 @@ func (a *App) updateItemStatus(w http.ResponseWriter, r *http.Request) {
 		}
 
 		a.items[i].Status = newStatus
+		if err := a.updateItemStatusLocked(id, newStatus); err != nil {
+			log.Printf("db error while updating item status: %v", err)
+			http.Error(w, "could not update item status", http.StatusInternalServerError)
+			return
+		}
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
@@ -484,6 +526,9 @@ func (a *App) promoteReadyItemsLocked(now time.Time) {
 		}
 		if !a.items[i].PurchaseAllowedAt.After(now) {
 			a.items[i].Status = "Ready to buy"
+			if err := a.updatePromotedItemLocked(a.items[i]); err != nil {
+				log.Printf("db error while promoting item %d: %v", a.items[i].ID, err)
+			}
 			a.sendNtfyNotificationLocked(a.items[i])
 		}
 	}
@@ -497,6 +542,9 @@ func (a *App) sendNtfyNotificationLocked(item Item) {
 	for i := range a.items {
 		if a.items[i].ID == item.ID {
 			a.items[i].NtfyAttempted = true
+			if err := a.markNtfyAttemptedLocked(item.ID); err != nil {
+				log.Printf("db error while marking ntfy attempt for item %d: %v", item.ID, err)
+			}
 			break
 		}
 	}

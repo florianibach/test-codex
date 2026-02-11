@@ -10,7 +10,15 @@ import (
 )
 
 func main() {
-	app := web.NewApp()
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "data/app.db"
+	}
+
+	app, err := web.NewAppWithSQLite(dbPath)
+	if err != nil {
+		log.Fatalf("failed to initialize database at %s: %v", dbPath, err)
+	}
 
 	port := os.Getenv("PORT")
 	if port == "" {

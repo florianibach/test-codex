@@ -27,6 +27,12 @@ Für dieses MVP wurde **Go** gewählt (alternativ wäre C# möglich gewesen), da
 go run ./cmd/server
 ```
 
+Optional mit eigener DB-Datei:
+
+```bash
+DB_PATH=./data/app.db go run ./cmd/server
+```
+
 App: http://127.0.0.1:8080
 
 ### Mit Docker Compose
@@ -36,6 +42,8 @@ docker compose up --build
 ```
 
 App: http://127.0.0.1:8080
+
+SQLite-DB (persistiert via Docker Volume): `app-data` unter `/app/data/app.db`.
 
 ## Tests ausführen
 
