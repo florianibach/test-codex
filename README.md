@@ -76,4 +76,5 @@ Pipeline-Schritte:
 2. `go test ./...`
 3. Node Setup + `npm ci`
 4. Playwright Browser-Installation (Chromium)
-5. `npm run test:e2e:smoke`
+5. `npm run test:e2e:smoke` (mit 1 Retry in CI, damit bei Flakes ein Trace erzeugt wird)
+6. Upload von `playwright-report/` und `test-results/` als CI-Artefakte
