@@ -18,7 +18,7 @@ test.describe('MVP mobile flow', () => {
     const startedAt = Date.now();
 
     interactionCount += 1;
-    await page.getByRole('link', { name: 'Add item' }).click();
+    await page.getByRole('main').getByRole('link', { name: 'Add item' }).click();
 
     interactionCount += 1;
     await page.getByLabel('Title *').fill('Coffee grinder');
