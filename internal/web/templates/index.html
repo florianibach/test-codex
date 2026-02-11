@@ -4,13 +4,91 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{{.Title}}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-LN+7fdVzj6u52u30Kp6M/trliBMCMKTyK833zpbD+pXdCLuTusPj697FH4R/5mcr" crossorigin="anonymous">
 </head>
-<body>
-  <h1>MVP läuft ✅</h1>
-  <p>Dies ist ein minimales Grundgerüst mit Go, Docker, CI und Playwright.</p>
-  <nav>
-    <a href="/">Home</a> |
-    <a href="/about">About</a>
-  </nav>
+<body class="bg-body-tertiary">
+  <main class="container py-3 py-md-4" style="max-width: 720px;">
+    <header class="d-flex justify-content-between align-items-center mb-3">
+      <div>
+        <h1 class="h3 mb-1">Impulse Pause</h1>
+        <p class="text-secondary mb-0">Leite spontane Käufe in die Warteliste um.</p>
+      </div>
+      <a class="btn btn-outline-secondary btn-sm" href="/about">About</a>
+    </header>
+
+    <section class="card shadow-sm mb-4">
+      <div class="card-body">
+        <h2 class="h5 card-title">Item schnell erfassen</h2>
+        <p class="text-secondary small">Nur ein Titel ist Pflicht. Alles andere kannst du später ergänzen.</p>
+
+        {{if .Error}}
+        <div class="alert alert-danger py-2" role="alert">{{.Error}}</div>
+        {{end}}
+
+        <form method="post" action="/" class="vstack gap-3">
+          <div>
+            <label for="title" class="form-label">Titel <span class="text-danger">*</span></label>
+            <input id="title" name="title" class="form-control form-control-lg" autocomplete="off" required placeholder="z. B. Neue Kopfhörer" value="{{.FormValues.Title}}" />
+          </div>
+
+          <details>
+            <summary class="text-primary">Optionale Felder</summary>
+            <div class="pt-3 vstack gap-3">
+              <div>
+                <label for="price" class="form-label">Preis</label>
+                <input id="price" name="price" class="form-control" placeholder="z. B. 129,99" value="{{.FormValues.Price}}" />
+              </div>
+              <div>
+                <label for="link" class="form-label">Link</label>
+                <input id="link" name="link" class="form-control" placeholder="https://..." value="{{.FormValues.Link}}" />
+              </div>
+              <div>
+                <label for="tags" class="form-label">Tags</label>
+                <input id="tags" name="tags" class="form-control" placeholder="Tech, Audio" value="{{.FormValues.Tags}}" />
+              </div>
+              <div>
+                <label for="note" class="form-label">Notiz</label>
+                <textarea id="note" name="note" class="form-control" rows="2" placeholder="Warum willst du das kaufen?">{{.FormValues.Note}}</textarea>
+              </div>
+            </div>
+          </details>
+
+          <button class="btn btn-primary btn-lg" type="submit">Zur Warteliste hinzufügen</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="card shadow-sm">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h2 class="h5 mb-0">Warteliste</h2>
+          <span class="badge text-bg-secondary">{{len .Items}} Items</span>
+        </div>
+
+        {{if not .Items}}
+        <p class="text-secondary mb-0">Noch keine Einträge. Leg dein erstes Item an.</p>
+        {{else}}
+        <ul class="list-group list-group-flush">
+          {{range .Items}}
+          <li class="list-group-item px-0">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+              <div>
+                <p class="fw-semibold mb-1">{{.Title}}</p>
+                {{if .Note}}<p class="small text-secondary mb-1">{{.Note}}</p>{{end}}
+                {{if .Tags}}<p class="small text-secondary mb-1">Tags: {{.Tags}}</p>{{end}}
+                {{if .Link}}<a class="small" href="{{.Link}}" target="_blank" rel="noreferrer">Link öffnen</a>{{end}}
+              </div>
+              <div class="text-end">
+                <span class="badge text-bg-warning">{{.Status}}</span>
+                {{if .Price}}<p class="small text-secondary mb-0 mt-1">{{.Price}}</p>{{end}}
+              </div>
+            </div>
+          </li>
+          {{end}}
+        </ul>
+        {{end}}
+      </div>
+    </section>
+  </main>
 </body>
 </html>
