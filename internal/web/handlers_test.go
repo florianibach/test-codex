@@ -410,6 +410,28 @@ func TestParseWaitDuration(t *testing.T) {
 	}
 }
 
+func TestFormatWorkHoursRoundingBoundaries(t *testing.T) {
+	tests := []struct {
+		name       string
+		price      string
+		hourlyWage float64
+		want       string
+	}{
+		{name: "rounds down below midpoint", price: "30.4", hourlyWage: 10, want: "3.0"},
+		{name: "rounds up at midpoint", price: "30.5", hourlyWage: 10, want: "3.1"},
+		{name: "rounds up above midpoint", price: "30.6", hourlyWage: 10, want: "3.1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := formatWorkHours(Item{Price: tt.price}, tt.hourlyWage)
+			if got != tt.want {
+				t.Fatalf("expected %q, got %q", tt.want, got)
+			}
+		})
+	}
+}
+
 func TestParseHourlyWage(t *testing.T) {
 	tests := []struct {
 		name            string

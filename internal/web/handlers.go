@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html/template"
 	"log"
+	"math"
 	"net/http"
 	"slices"
 	"strconv"
@@ -399,7 +400,8 @@ func formatWorkHours(item Item, hourlyWage float64) string {
 	}
 
 	hours := price / hourlyWage
-	return fmt.Sprintf("%.1f", hours)
+	roundedHours := math.Round(hours*10) / 10
+	return fmt.Sprintf("%.1f", roundedHours)
 }
 
 func statusBadgeClass(status string) string {
