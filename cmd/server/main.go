@@ -10,6 +10,12 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func run() error {
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
 		dbPath = "data/app.db"
@@ -17,7 +23,7 @@ func main() {
 
 	app, err := web.NewAppWithSQLite(dbPath)
 	if err != nil {
-		log.Fatalf("failed to initialize database at %s: %v", dbPath, err)
+		return fmt.Errorf("failed to initialize database at %s: %w", dbPath, err)
 	}
 
 	port := os.Getenv("PORT")
@@ -34,6 +40,7 @@ func main() {
 	addr := ":" + port
 	log.Printf("starting server on %s", addr)
 	if err := http.ListenAndServe(addr, app.Handler()); err != nil {
-		log.Fatalf("server failed: %v", err)
+		return fmt.Errorf("server failed: %w", err)
 	}
+	return nil
 }

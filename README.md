@@ -53,6 +53,14 @@ SQLite-DB (persistiert via Docker Volume): `app-data` unter `/app/data/app.db`.
 go test ./...
 ```
 
+### Optional: Docker-Compose Integrationscheck (MVP-008 AC1/AC2)
+
+Benötigt eine lokale Docker-Installation:
+
+```bash
+RUN_DOCKER_TESTS=1 go test ./cmd/server -run TestDockerComposeAppReachableAndPersistsDataAcrossRestart -v
+```
+
 ### Playwright E2E (exploratory smoke suite)
 
 Installieren:
