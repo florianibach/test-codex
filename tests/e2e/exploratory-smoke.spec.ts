@@ -119,6 +119,34 @@ test('profile validates invalid hourly wage', async ({ page }) => {
   await expect(page.getByRole('alert')).toContainText('valid hourly wage');
 });
 
+
+
+test('reality check shows work hours and updates after wage change', async ({ page }) => {
+  const title = uniqueTitle('Reality');
+
+  await page.goto('/settings/profile');
+  await page.getByLabel('Net hourly wage').fill('20');
+  await page.getByRole('button', { name: 'Save profile' }).click();
+  await expect(page.getByText('Profile saved.')).toBeVisible();
+
+  await page.goto('/items/new');
+  await page.getByLabel('Title *').fill(title);
+  await page.getByLabel('Price').fill('100');
+  await page.getByRole('button', { name: 'Add to waitlist' }).click();
+
+  let itemRow = page.locator('li.list-group-item').filter({ hasText: title }).first();
+  await expect(itemRow).toContainText('Work hours: 5.0 h');
+
+  await page.goto('/settings/profile');
+  await page.getByLabel('Net hourly wage').fill('25');
+  await page.getByRole('button', { name: 'Save profile' }).click();
+  await expect(page.getByText('Profile saved.')).toBeVisible();
+
+  await page.goto('/');
+  itemRow = page.locator('li.list-group-item').filter({ hasText: title }).first();
+  await expect(itemRow).toContainText('Work hours: 4.0 h');
+});
+
 async function waitForItemStatus(page, title: string, status: string) {
   const itemRow = page.locator('li.list-group-item').filter({ hasText: title }).first();
 

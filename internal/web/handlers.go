@@ -3,6 +3,7 @@ package web
 import (
 	"embed"
 	"errors"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -20,6 +21,8 @@ type Item struct {
 	ID                int
 	Title             string
 	Price             string
+	PriceValue        float64
+	HasPriceValue     bool
 	Link              string
 	Note              string
 	Tags              string
@@ -36,6 +39,8 @@ type homeViewData struct {
 	ContentTemplate string
 	ScriptTemplate  string
 	Items           []Item
+	HourlyWage      float64
+	HasHourlyWage   bool
 }
 
 type itemFormViewData struct {
@@ -76,7 +81,9 @@ type App struct {
 
 func NewApp() *App {
 	tpls := template.Must(template.New("").Funcs(template.FuncMap{
-		"statusBadgeClass": statusBadgeClass,
+		"statusBadgeClass":   statusBadgeClass,
+		"workHoursAvailable": workHoursAvailable,
+		"formatWorkHours":    formatWorkHours,
 	}).ParseFS(embeddedFiles, "templates/*.html"))
 	mux := http.NewServeMux()
 
@@ -140,6 +147,11 @@ func (a *App) createItem(w http.ResponseWriter, r *http.Request) {
 		Tags:            strings.TrimSpace(r.FormValue("tags")),
 		WaitPreset:      strings.TrimSpace(r.FormValue("wait_preset")),
 		WaitCustomHours: strings.TrimSpace(r.FormValue("wait_custom_hours")),
+	}
+
+	if parsedPrice, ok := parsePrice(item.Price); ok {
+		item.PriceValue = parsedPrice
+		item.HasPriceValue = true
 	}
 
 	if item.Title == "" {
@@ -309,6 +321,10 @@ func (a *App) renderHome(w http.ResponseWriter, data homeViewData) {
 	a.mu.Lock()
 	a.promoteReadyItemsLocked(time.Now())
 	data.Items = append([]Item(nil), a.items...)
+	if parsedWage, err := parseHourlyWage(a.hourlyWage); err == nil {
+		data.HourlyWage = parsedWage
+		data.HasHourlyWage = true
+	}
 	data.ContentTemplate = "index_content"
 	data.ScriptTemplate = "index_script"
 	a.mu.Unlock()
@@ -347,6 +363,15 @@ func parseHourlyWage(raw string) (float64, error) {
 	return parsed, nil
 }
 
+func parsePrice(raw string) (float64, bool) {
+	parsed, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
+	if err != nil || parsed <= 0 {
+		return 0, false
+	}
+
+	return parsed, true
+}
+
 func (a *App) promoteReadyItemsLocked(now time.Time) {
 	for i := range a.items {
 		if a.items[i].Status != "Waiting" {
@@ -356,6 +381,25 @@ func (a *App) promoteReadyItemsLocked(now time.Time) {
 			a.items[i].Status = "Ready to buy"
 		}
 	}
+}
+
+func workHoursAvailable(item Item, hourlyWage float64, hasHourlyWage bool) bool {
+	if !hasHourlyWage {
+		return false
+	}
+
+	_, ok := parsePrice(item.Price)
+	return ok
+}
+
+func formatWorkHours(item Item, hourlyWage float64) string {
+	price, ok := parsePrice(item.Price)
+	if !ok || hourlyWage <= 0 {
+		return ""
+	}
+
+	hours := price / hourlyWage
+	return fmt.Sprintf("%.1f", hours)
 }
 
 func statusBadgeClass(status string) string {
