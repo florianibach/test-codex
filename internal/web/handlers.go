@@ -113,6 +113,7 @@ func NewApp() *App {
 
 	app := &App{templates: tpls, mux: mux, nextID: 1}
 	app.routes()
+	app.StartBackgroundPromotion(5 * time.Second)
 
 	return app
 }
@@ -135,17 +136,23 @@ func (a *App) Handler() http.Handler {
 
 func (a *App) StartBackgroundPromotion(interval time.Duration) {
 	if interval <= 0 {
-		interval = 30 * time.Second
+		interval = 5 * time.Second
 	}
 
 	go func() {
+		promote := func() {
+			a.mu.Lock()
+			a.promoteReadyItemsLocked(time.Now())
+			a.mu.Unlock()
+		}
+
+		promote()
+
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 
 		for range ticker.C {
-			a.mu.Lock()
-			a.promoteReadyItemsLocked(time.Now())
-			a.mu.Unlock()
+			promote()
 		}
 	}()
 }

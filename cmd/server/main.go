@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"time"
 
 	"mvpapp/internal/web"
 )
@@ -23,7 +22,6 @@ func main() {
 		baseURL = fmt.Sprintf("http://localhost:%s", port)
 	}
 	app.SetDashboardURL(baseURL)
-	app.StartBackgroundPromotion(30 * time.Second)
 
 	addr := ":" + port
 	log.Printf("starting server on %s", addr)
