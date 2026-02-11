@@ -122,6 +122,13 @@ test('MVP-002: custom wait duration validates invalid values', async ({ page }) 
   await page.getByLabel('Wartezeit').selectOption('custom');
   await page.getByLabel('Custom (Stunden)').fill('0');
   await page.getByLabel('Titel *').fill(uniqueTitle('Schallplatte'));
+
+  // Browser number constraints (min/step) can block submit before backend validation.
+  // Disable native form validation here to verify server-side custom wait validation.
+  await page.locator('form[action="/"]').evaluate((form) => {
+    (form as HTMLFormElement).noValidate = true;
+  });
+
   await page.getByRole('button', { name: 'Zur Warteliste hinzufügen' }).click();
 
   await expect(page.getByRole('alert')).toContainText('gültige Anzahl Stunden');
