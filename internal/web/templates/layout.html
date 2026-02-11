@@ -14,6 +14,7 @@
       <nav class="navbar-nav" aria-label="Primary">
         <a class="nav-link {{if eq .CurrentPath "/"}}active{{end}}" href="/">Dashboard</a>
         <a class="nav-link {{if eq .CurrentPath "/items/new"}}active{{end}}" href="/items/new">Add item</a>
+        <a class="nav-link {{if eq .CurrentPath "/insights"}}active{{end}}" href="/insights">Insights</a>
         <a class="nav-link {{if eq .CurrentPath "/settings/profile"}}active{{end}}" href="/settings/profile">Settings</a>
         <a class="nav-link {{if eq .CurrentPath "/about"}}active{{end}}" href="/about">About</a>
       </nav>
@@ -27,6 +28,8 @@
       {{template "items_new_content" .}}
     {{else if eq .ContentTemplate "profile_content"}}
       {{template "profile_content" .}}
+    {{else if eq .ContentTemplate "insights_content"}}
+      {{template "insights_content" .}}
     {{else if eq .ContentTemplate "about_content"}}
       {{template "about_content" .}}
     {{end}}

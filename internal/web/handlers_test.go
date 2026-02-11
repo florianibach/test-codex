@@ -26,8 +26,8 @@ func TestHomeRoute(t *testing.T) {
 	if !strings.Contains(body, ">Settings<") {
 		t.Fatalf("expected settings navigation in title bar")
 	}
-	if strings.Contains(body, "Profile status") {
-		t.Fatalf("did not expect profile status card on dashboard")
+	if strings.Contains(body, "Track how your pause decisions impact your spending habits.") {
+		t.Fatalf("did not expect insights page content on dashboard")
 	}
 }
 
@@ -40,6 +40,21 @@ func TestHomeRouteRejectsPost(t *testing.T) {
 
 	if rr.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected 405, got %d", rr.Code)
+	}
+}
+
+func TestInsightsRouteGet(t *testing.T) {
+	app := NewApp()
+	req := httptest.NewRequest(http.MethodGet, "/insights", nil)
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if body := rr.Body.String(); !strings.Contains(body, "<h1 class=\"h3 mb-1\">Insights</h1>") {
+		t.Fatalf("expected insights page content")
 	}
 }
 
@@ -464,7 +479,7 @@ func TestParseHourlyWage(t *testing.T) {
 	}
 }
 
-func TestHomeShowsDashboardInsights(t *testing.T) {
+func TestInsightsPageShowsDashboardInsights(t *testing.T) {
 	app := NewApp()
 
 	app.mu.Lock()
@@ -475,7 +490,7 @@ func TestHomeShowsDashboardInsights(t *testing.T) {
 	)
 	app.mu.Unlock()
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/insights", nil)
 	rr := httptest.NewRecorder()
 	app.Handler().ServeHTTP(rr, req)
 
@@ -489,15 +504,15 @@ func TestHomeShowsDashboardInsights(t *testing.T) {
 	if !strings.Contains(body, "Saved total") || !strings.Contains(body, "149.99") {
 		t.Fatalf("expected saved total metric")
 	}
-	if !strings.Contains(body, "tech (2)") {
+	if !strings.Contains(body, "tech · 2") {
 		t.Fatalf("expected aggregated top category")
 	}
 }
 
-func TestHomeShowsInsightsZeroStateWhenNoItems(t *testing.T) {
+func TestInsightsPageShowsZeroStateWhenNoItems(t *testing.T) {
 	app := NewApp()
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/insights", nil)
 	rr := httptest.NewRecorder()
 	app.Handler().ServeHTTP(rr, req)
 

@@ -42,6 +42,14 @@ type homeViewData struct {
 	Items           []Item
 	HourlyWage      float64
 	HasHourlyWage   bool
+}
+
+type insightsViewData struct {
+	Title           string
+	CurrentPath     string
+	ContentTemplate string
+	ScriptTemplate  string
+	ItemCount       int
 	SkippedCount    int
 	SavedAmount     float64
 	TopCategories   []categoryCount
@@ -105,6 +113,7 @@ func NewApp() *App {
 func (a *App) routes() {
 	a.mux.HandleFunc("/", a.home)
 	a.mux.HandleFunc("/items/new", a.itemForm)
+	a.mux.HandleFunc("/insights", a.insights)
 	a.mux.HandleFunc("/settings/profile", a.profileSettings)
 	a.mux.HandleFunc("/profile", a.legacyProfile)
 	a.mux.HandleFunc("/items/status", a.updateItemStatus)
@@ -126,6 +135,20 @@ func (a *App) home(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet, http.MethodHead:
 		a.renderHome(w, homeViewData{Title: "Impulse Pause", CurrentPath: "/"})
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (a *App) insights(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/insights" {
+		http.NotFound(w, r)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet, http.MethodHead:
+		a.renderInsights(w, insightsViewData{Title: "Insights", CurrentPath: "/insights"})
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -330,7 +353,6 @@ func (a *App) renderHome(w http.ResponseWriter, data homeViewData) {
 	a.mu.Lock()
 	a.promoteReadyItemsLocked(time.Now())
 	data.Items = append([]Item(nil), a.items...)
-	data.SkippedCount, data.SavedAmount, data.TopCategories = buildDashboardStats(data.Items)
 	if parsedWage, err := parseHourlyWage(a.hourlyWage); err == nil {
 		data.HourlyWage = parsedWage
 		data.HasHourlyWage = true
@@ -339,6 +361,17 @@ func (a *App) renderHome(w http.ResponseWriter, data homeViewData) {
 	data.ScriptTemplate = "index_script"
 	a.mu.Unlock()
 
+	renderTemplate(w, a.templates, "layout", data)
+}
+
+func (a *App) renderInsights(w http.ResponseWriter, data insightsViewData) {
+	a.mu.Lock()
+	a.promoteReadyItemsLocked(time.Now())
+	data.ItemCount = len(a.items)
+	data.SkippedCount, data.SavedAmount, data.TopCategories = buildDashboardStats(a.items)
+	a.mu.Unlock()
+
+	data.ContentTemplate = "insights_content"
 	renderTemplate(w, a.templates, "layout", data)
 }
 

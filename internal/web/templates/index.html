@@ -6,47 +6,9 @@
       <p class="text-secondary mb-0">Review your items and decide with less friction.</p>
     </div>
     <div class="d-flex gap-2 wrap-sm">
+      <a class="btn btn-outline-primary" href="/insights">View insights</a>
       <a class="btn btn-primary" href="/items/new">Add item</a>
     </div>
-  </div>
-</section>
-
-
-<section class="card shadow-sm mb-4">
-  <div class="card-body">
-    <h2 class="h5 mb-3">Insights</h2>
-    {{if not .Items}}
-    <p class="text-secondary mb-0">No data yet. Add items and make decisions to unlock insights.</p>
-    {{else}}
-    <div class="row g-3">
-      <div class="col-12 col-md-4">
-        <div class="border rounded p-3 h-100">
-          <p class="text-secondary small mb-1">Skipped items</p>
-          <p class="h4 mb-0">{{.SkippedCount}}</p>
-        </div>
-      </div>
-      <div class="col-12 col-md-4">
-        <div class="border rounded p-3 h-100">
-          <p class="text-secondary small mb-1">Saved total</p>
-          <p class="h4 mb-0">{{printf "%.2f" .SavedAmount}}</p>
-        </div>
-      </div>
-      <div class="col-12 col-md-4">
-        <div class="border rounded p-3 h-100">
-          <p class="text-secondary small mb-2">Top categories</p>
-          {{if .TopCategories}}
-          <ul class="list-unstyled mb-0 small">
-            {{range .TopCategories}}
-            <li>{{.Name}} ({{.Count}})</li>
-            {{end}}
-          </ul>
-          {{else}}
-          <p class="small text-secondary mb-0">No categories yet.</p>
-          {{end}}
-        </div>
-      </div>
-    </div>
-    {{end}}
   </div>
 </section>
 
