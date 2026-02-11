@@ -31,10 +31,14 @@ type Item struct {
 }
 
 type homeViewData struct {
-	Title      string
-	Items      []Item
-	FormValues Item
-	Error      string
+	Title           string
+	Items           []Item
+	FormValues      Item
+	Error           string
+	ProfileHourly   string
+	ProfileError    string
+	ProfileFeedback string
+	ProfileEditing  bool
 }
 
 type pageData struct {
@@ -42,11 +46,12 @@ type pageData struct {
 }
 
 type App struct {
-	templates *template.Template
-	mux       *http.ServeMux
-	mu        sync.RWMutex
-	items     []Item
-	nextID    int
+	templates  *template.Template
+	mux        *http.ServeMux
+	mu         sync.RWMutex
+	items      []Item
+	hourlyWage string
+	nextID     int
 }
 
 func NewApp() *App {
@@ -63,6 +68,7 @@ func NewApp() *App {
 
 func (a *App) routes() {
 	a.mux.HandleFunc("/", a.home)
+	a.mux.HandleFunc("/profile", a.saveProfile)
 	a.mux.HandleFunc("/items/status", a.updateItemStatus)
 	a.mux.HandleFunc("/healthz", a.health)
 	a.mux.HandleFunc("/about", a.about)
@@ -81,7 +87,10 @@ func (a *App) home(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet, http.MethodHead:
-		a.renderHome(w, homeViewData{Title: "Impulse Pause"})
+		a.renderHome(w, homeViewData{
+			Title:          "Impulse Pause",
+			ProfileEditing: r.URL.Query().Get("edit_profile") == "1",
+		})
 	case http.MethodPost:
 		a.createItem(w, r)
 	default:
@@ -140,6 +149,41 @@ func (a *App) createItem(w http.ResponseWriter, r *http.Request) {
 	a.mu.Unlock()
 
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	hourlyWage := strings.TrimSpace(r.FormValue("hourly_wage"))
+	if _, err := parseHourlyWage(hourlyWage); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		a.renderHome(w, homeViewData{
+			Title:          "Impulse Pause",
+			ProfileHourly:  hourlyWage,
+			ProfileError:   err.Error(),
+			ProfileEditing: true,
+		})
+		return
+	}
+
+	a.mu.Lock()
+	a.hourlyWage = hourlyWage
+	a.mu.Unlock()
+
+	a.renderHome(w, homeViewData{
+		Title:           "Impulse Pause",
+		ProfileHourly:   hourlyWage,
+		ProfileFeedback: "Profil gespeichert.",
+		ProfileEditing:  false,
+	})
 }
 
 func (a *App) updateItemStatus(w http.ResponseWriter, r *http.Request) {
@@ -215,9 +259,25 @@ func (a *App) renderHome(w http.ResponseWriter, data homeViewData) {
 	a.mu.Lock()
 	a.promoteReadyItemsLocked(time.Now())
 	data.Items = append([]Item(nil), a.items...)
+	if data.ProfileHourly == "" {
+		data.ProfileHourly = a.hourlyWage
+	}
 	a.mu.Unlock()
 
+	if data.ProfileHourly == "" || data.ProfileError != "" {
+		data.ProfileEditing = true
+	}
+
 	renderTemplate(w, a.templates, "index.html", data)
+}
+
+func parseHourlyWage(raw string) (float64, error) {
+	parsed, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
+	if err != nil || parsed <= 0 {
+		return 0, errors.New("Bitte gib einen gültigen Stundenlohn (> 0) ein.")
+	}
+
+	return parsed, nil
 }
 
 func (a *App) promoteReadyItemsLocked(now time.Time) {

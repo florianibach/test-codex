@@ -419,6 +419,215 @@ func TestParseWaitDuration(t *testing.T) {
 	}
 }
 
+func TestProfileCanBeSavedAndPersisted(t *testing.T) {
+	app := NewApp()
+	form := url.Values{}
+	form.Set("hourly_wage", "42.5")
+
+	req := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if body := rr.Body.String(); !strings.Contains(body, "Profil gespeichert.") {
+		t.Fatalf("expected success feedback in response body")
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	getRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(getRR, getReq)
+
+	if body := getRR.Body.String(); !strings.Contains(body, "<strong id=\"hourly-wage-value\">42.5</strong>") {
+		t.Fatalf("expected persisted hourly wage in profile read view")
+	}
+}
+
+func TestProfileUpdateOverwritesExistingValue(t *testing.T) {
+	app := NewApp()
+
+	first := url.Values{}
+	first.Set("hourly_wage", "21")
+	firstReq := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(first.Encode()))
+	firstReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	firstRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(firstRR, firstReq)
+
+	if firstRR.Code != http.StatusOK {
+		t.Fatalf("expected first save status 200, got %d", firstRR.Code)
+	}
+
+	second := url.Values{}
+	second.Set("hourly_wage", "33")
+	secondReq := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(second.Encode()))
+	secondReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	secondRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(secondRR, secondReq)
+
+	if secondRR.Code != http.StatusOK {
+		t.Fatalf("expected second save status 200, got %d", secondRR.Code)
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	getRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(getRR, getReq)
+
+	body := getRR.Body.String()
+	if !strings.Contains(body, "<strong id=\"hourly-wage-value\">33</strong>") {
+		t.Fatalf("expected updated hourly wage in profile read view")
+	}
+	if strings.Contains(body, "<strong id=\"hourly-wage-value\">21</strong>") {
+		t.Fatalf("expected previous hourly wage not to remain in profile read view")
+	}
+}
+
+func TestProfileValidation(t *testing.T) {
+	app := NewApp()
+	form := url.Values{}
+	form.Set("hourly_wage", "0")
+
+	req := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+	if body := rr.Body.String(); !strings.Contains(body, "gültigen Stundenlohn") {
+		t.Fatalf("expected hourly wage validation in response body")
+	}
+}
+
+func TestProfileRouteMethodNotAllowed(t *testing.T) {
+	app := NewApp()
+	req := httptest.NewRequest(http.MethodGet, "/profile", nil)
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", rr.Code)
+	}
+}
+
+func TestProfileUsesReadViewAfterSaving(t *testing.T) {
+	app := NewApp()
+	form := url.Values{}
+	form.Set("hourly_wage", "30")
+
+	req := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "id=\"profile-read-view\"") {
+		t.Fatalf("expected profile read view to be rendered")
+	}
+	if !strings.Contains(body, "<strong id=\"hourly-wage-value\">30</strong>") {
+		t.Fatalf("expected saved hourly wage value in read view")
+	}
+	if !strings.Contains(body, "id=\"profile-edit-btn\"") {
+		t.Fatalf("expected edit button in read view")
+	}
+	if strings.Contains(body, "id=\"profile-edit-form\"") {
+		t.Fatalf("expected profile edit form to be absent in read view")
+	}
+}
+
+func TestProfileValidationKeepsEditMode(t *testing.T) {
+	app := NewApp()
+	form := url.Values{}
+	form.Set("hourly_wage", "0")
+
+	req := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "id=\"profile-edit-form\"") {
+		t.Fatalf("expected profile edit form to remain visible on validation error")
+	}
+	if strings.Contains(body, "id=\"profile-read-view\"") {
+		t.Fatalf("expected read view to be absent on validation error")
+	}
+}
+
+func TestProfileEditQueryShowsEditModeForExistingProfile(t *testing.T) {
+	app := NewApp()
+	app.mu.Lock()
+	app.hourlyWage = "44"
+	app.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/?edit_profile=1", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "id=\"profile-edit-form\"") {
+		t.Fatalf("expected profile edit form in edit mode")
+	}
+	if strings.Contains(body, "id=\"profile-read-view\"") {
+		t.Fatalf("expected read view to be absent in edit mode")
+	}
+	if !strings.Contains(body, "value=\"44\"") {
+		t.Fatalf("expected existing profile hourly wage in edit form")
+	}
+}
+
+func TestParseHourlyWage(t *testing.T) {
+	tests := []struct {
+		name            string
+		raw             string
+		want            float64
+		wantErrContains string
+	}{
+		{name: "valid", raw: "20", want: 20},
+		{name: "valid decimal", raw: "17.5", want: 17.5},
+		{name: "trimmed", raw: " 33 ", want: 33},
+		{name: "empty", raw: "", wantErrContains: "gültigen Stundenlohn"},
+		{name: "zero", raw: "0", wantErrContains: "gültigen Stundenlohn"},
+		{name: "negative", raw: "-2", wantErrContains: "gültigen Stundenlohn"},
+		{name: "not numeric", raw: "abc", wantErrContains: "gültigen Stundenlohn"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseHourlyWage(tt.raw)
+			if tt.wantErrContains != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErrContains) {
+					t.Fatalf("expected error containing %q, got %v", tt.wantErrContains, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("expected %v, got %v", tt.want, got)
+			}
+		})
+	}
+}
+
 func TestHealthRoute(t *testing.T) {
 	app := NewApp()
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)

@@ -184,6 +184,58 @@ test('MVP-002: purchase-allowed timestamp is rendered in browser locale from dat
   await expect(timeElement).toHaveText(expectedText);
 });
 
+
+test('MVP-004: profile hourly wage shows as value after save and can be edited', async ({ page }) => {
+  await page.goto('/');
+
+  const hourlyWageInput = page.getByLabel('Netto-Stundenlohn');
+  if (!(await hourlyWageInput.isVisible())) {
+    await page.getByRole('button', { name: 'Edit' }).click();
+  }
+
+  await hourlyWageInput.fill('31.5');
+  await page.getByRole('button', { name: 'Profil speichern' }).click();
+
+  await expect(page.getByRole('status')).toContainText('Profil gespeichert.');
+  await expect(page.locator('#hourly-wage-value')).toHaveText('31.5');
+  await expect(page.getByRole('button', { name: 'Edit' })).toBeVisible();
+  await expect(page.locator('#profile-edit-form')).toHaveCount(0);
+  await expect(page.locator('#profile-save-btn')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Edit' }).click();
+  await expect(page.getByLabel('Netto-Stundenlohn')).toHaveValue('31.5');
+  await expect(page.getByRole('button', { name: 'Profil speichern' })).toBeVisible();
+
+  // Edit navigates to /?edit_profile=1. Return to canonical home URL
+  // before verifying read mode after a refresh.
+  await page.goto('/');
+  await page.reload();
+  await expect(page.locator('#hourly-wage-value')).toHaveText('31.5');
+  await expect(page.locator('#profile-edit-form')).toHaveCount(0);
+  await expect(page.locator('#profile-save-btn')).toHaveCount(0);
+});
+
+test('MVP-004: profile validates invalid hourly wage', async ({ page }) => {
+  await page.goto('/');
+
+  const editButton = page.getByRole('button', { name: 'Edit' });
+  if (await editButton.isVisible()) {
+    await editButton.click();
+  }
+
+  await page.getByLabel('Netto-Stundenlohn').fill('0');
+
+  // Browser number constraints (min/required) can block submit before backend validation.
+  // Disable native form validation here to verify server-side hourly wage validation.
+  await page.locator('form[action="/profile"]').evaluate((form) => {
+    (form as HTMLFormElement).noValidate = true;
+  });
+
+  await page.getByRole('button', { name: 'Profil speichern' }).click();
+
+  await expect(page.getByRole('alert')).toContainText('gültigen Stundenlohn');
+});
+
 async function waitForItemStatus(page, title: string, status: string) {
   const itemRow = page.locator('li.list-group-item').filter({ hasText: title }).first();
 
