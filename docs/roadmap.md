@@ -156,7 +156,7 @@ Als Nutzer:in möchte ich bei Ablauf der Wartezeit eine Benachrichtigung erhalte
 
 ---
 
-### MVP-008 — Lokale Persistenz & Self-hosted Betriebsfähigkeit
+### (done) MVP-008 — Lokale Persistenz & Self-hosted Betriebsfähigkeit
 **User Story**  
 Als Betreiber:in möchte ich die App lokal und self-hosted mit persistenter Datenhaltung betreiben, damit meine Daten ohne Cloud-Abhängigkeit verfügbar bleiben.
 

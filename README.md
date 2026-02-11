@@ -27,6 +27,12 @@ Für dieses MVP wurde **Go** gewählt (alternativ wäre C# möglich gewesen), da
 go run ./cmd/server
 ```
 
+Optional mit eigener DB-Datei:
+
+```bash
+DB_PATH=./data/app.db go run ./cmd/server
+```
+
 App: http://127.0.0.1:8080
 
 ### Mit Docker Compose
@@ -37,12 +43,22 @@ docker compose up --build
 
 App: http://127.0.0.1:8080
 
+SQLite-DB (persistiert via Docker Volume): `app-data` unter `/app/data/app.db`.
+
 ## Tests ausführen
 
 ### Go Unit-Tests
 
 ```bash
 go test ./...
+```
+
+### Optional: Docker-Compose Integrationscheck (MVP-008 AC1/AC2)
+
+Benötigt eine lokale Docker-Installation:
+
+```bash
+RUN_DOCKER_TESTS=1 go test ./cmd/server -run TestDockerComposeAppReachableAndPersistsDataAcrossRestart -v
 ```
 
 ### Playwright E2E (exploratory smoke suite)
