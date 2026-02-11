@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 
+const uniqueTitle = (prefix: string) => `${prefix} ${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
 test.describe('MVP-001 mobile flow', () => {
   test.use({
     viewport: { width: 390, height: 844 },
@@ -64,10 +66,11 @@ test('exploratory smoke suite: navigation, console, and HTTP errors', async ({ p
 test('MVP-001: title-only add flow creates waiting item', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByLabel('Titel *').fill('Neue Tastatur');
+  const title = uniqueTitle('Neue Tastatur');
+  await page.getByLabel('Titel *').fill(title);
   await page.getByRole('button', { name: 'Zur Warteliste hinzufügen' }).click();
 
-  const newItemRow = page.locator('li.list-group-item').filter({ hasText: 'Neue Tastatur' });
+  const newItemRow = page.locator('li.list-group-item').filter({ hasText: title }).first();
   await expect(newItemRow).toBeVisible();
   await expect(newItemRow.getByText('Wartet')).toBeVisible();
 });
@@ -90,11 +93,12 @@ test('MVP-002: wait presets are available and 7 Tage can be selected', async ({ 
   await expect(waitSelect.locator('option')).toHaveText(['24h', '7 Tage', '30 Tage', 'Custom']);
 
   await waitSelect.selectOption('7d');
-  await page.getByLabel('Titel *').fill('Laufschuhe');
+  const title = uniqueTitle('Laufschuhe');
+  await page.getByLabel('Titel *').fill(title);
   await page.getByRole('button', { name: 'Zur Warteliste hinzufügen' }).click();
 
-  await expect(page.getByText('Laufschuhe')).toBeVisible();
-  const itemRow = page.locator('li.list-group-item').filter({ hasText: 'Laufschuhe' });
+  const itemRow = page.locator('li.list-group-item').filter({ hasText: title }).first();
+  await expect(itemRow).toBeVisible();
   await expect(itemRow.getByText(/Kauf erlaubt ab:/)).toBeVisible();
 });
 
@@ -103,11 +107,13 @@ test('MVP-002: custom wait duration accepts positive hours', async ({ page }) =>
 
   await page.getByLabel('Wartezeit').selectOption('custom');
   await page.getByLabel('Custom (Stunden)').fill('12');
-  await page.getByLabel('Titel *').fill('Bücherregal');
+  const title = uniqueTitle('Bücherregal');
+  await page.getByLabel('Titel *').fill(title);
   await page.getByRole('button', { name: 'Zur Warteliste hinzufügen' }).click();
 
-  await expect(page.getByText('Bücherregal')).toBeVisible();
-  await expect(page.getByText('Wartet')).toBeVisible();
+  const itemRow = page.locator('li.list-group-item').filter({ hasText: title }).first();
+  await expect(itemRow).toBeVisible();
+  await expect(itemRow.getByText('Wartet')).toBeVisible();
 });
 
 test('MVP-002: custom wait duration validates invalid values', async ({ page }) => {
@@ -115,7 +121,7 @@ test('MVP-002: custom wait duration validates invalid values', async ({ page }) 
 
   await page.getByLabel('Wartezeit').selectOption('custom');
   await page.getByLabel('Custom (Stunden)').fill('0');
-  await page.getByLabel('Titel *').fill('Schallplatte');
+  await page.getByLabel('Titel *').fill(uniqueTitle('Schallplatte'));
   await page.getByRole('button', { name: 'Zur Warteliste hinzufügen' }).click();
 
   await expect(page.getByRole('alert')).toContainText('gültige Anzahl Stunden');
