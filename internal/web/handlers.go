@@ -38,6 +38,7 @@ type homeViewData struct {
 	ProfileHourly   string
 	ProfileError    string
 	ProfileFeedback string
+	ProfileEditing  bool
 }
 
 type pageData struct {
@@ -86,7 +87,10 @@ func (a *App) home(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet, http.MethodHead:
-		a.renderHome(w, homeViewData{Title: "Impulse Pause"})
+		a.renderHome(w, homeViewData{
+			Title:          "Impulse Pause",
+			ProfileEditing: r.URL.Query().Get("edit_profile") == "1",
+		})
 	case http.MethodPost:
 		a.createItem(w, r)
 	default:
@@ -162,9 +166,10 @@ func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 	if _, err := parseHourlyWage(hourlyWage); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		a.renderHome(w, homeViewData{
-			Title:         "Impulse Pause",
-			ProfileHourly: hourlyWage,
-			ProfileError:  err.Error(),
+			Title:          "Impulse Pause",
+			ProfileHourly:  hourlyWage,
+			ProfileError:   err.Error(),
+			ProfileEditing: true,
 		})
 		return
 	}
@@ -177,6 +182,7 @@ func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 		Title:           "Impulse Pause",
 		ProfileHourly:   hourlyWage,
 		ProfileFeedback: "Profil gespeichert.",
+		ProfileEditing:  false,
 	})
 }
 
@@ -257,6 +263,10 @@ func (a *App) renderHome(w http.ResponseWriter, data homeViewData) {
 		data.ProfileHourly = a.hourlyWage
 	}
 	a.mu.Unlock()
+
+	if data.ProfileHourly == "" || data.ProfileError != "" {
+		data.ProfileEditing = true
+	}
 
 	renderTemplate(w, a.templates, "index.html", data)
 }

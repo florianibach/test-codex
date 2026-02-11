@@ -441,8 +441,8 @@ func TestProfileCanBeSavedAndPersisted(t *testing.T) {
 	getRR := httptest.NewRecorder()
 	app.Handler().ServeHTTP(getRR, getReq)
 
-	if body := getRR.Body.String(); !strings.Contains(body, "value=\"42.5\"") {
-		t.Fatalf("expected persisted hourly wage in profile form")
+	if body := getRR.Body.String(); !strings.Contains(body, "<strong id=\"hourly-wage-value\">42.5</strong>") {
+		t.Fatalf("expected persisted hourly wage in profile read view")
 	}
 }
 
@@ -501,8 +501,8 @@ func TestProfileUsesReadViewAfterSaving(t *testing.T) {
 	if !strings.Contains(body, "id=\"profile-edit-btn\"") {
 		t.Fatalf("expected edit button in read view")
 	}
-	if !strings.Contains(body, "id=\"profile-edit-form\"") || !strings.Contains(body, "hidden") {
-		t.Fatalf("expected profile edit form to be hidden after saving")
+	if strings.Contains(body, "id=\"profile-edit-form\"") {
+		t.Fatalf("expected profile edit form to be absent in read view")
 	}
 }
 
@@ -521,11 +521,37 @@ func TestProfileValidationKeepsEditMode(t *testing.T) {
 	}
 
 	body := rr.Body.String()
-	if strings.Contains(body, "id=\"profile-edit-form\" method=\"post\" action=\"/profile\" class=\"vstack gap-3\" hidden") {
+	if !strings.Contains(body, "id=\"profile-edit-form\"") {
 		t.Fatalf("expected profile edit form to remain visible on validation error")
 	}
-	if !strings.Contains(body, "id=\"profile-read-view\" class=\"vstack gap-3\" hidden") {
-		t.Fatalf("expected read view to be hidden on validation error")
+	if strings.Contains(body, "id=\"profile-read-view\"") {
+		t.Fatalf("expected read view to be absent on validation error")
+	}
+}
+
+func TestProfileEditQueryShowsEditModeForExistingProfile(t *testing.T) {
+	app := NewApp()
+	app.mu.Lock()
+	app.hourlyWage = "44"
+	app.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/?edit_profile=1", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "id=\"profile-edit-form\"") {
+		t.Fatalf("expected profile edit form in edit mode")
+	}
+	if strings.Contains(body, "id=\"profile-read-view\"") {
+		t.Fatalf("expected read view to be absent in edit mode")
+	}
+	if !strings.Contains(body, "value=\"44\"") {
+		t.Fatalf("expected existing profile hourly wage in edit form")
 	}
 }
 
