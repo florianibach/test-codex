@@ -389,6 +389,132 @@ func TestLegacyProfileRouteRedirectsOnGet(t *testing.T) {
 	}
 }
 
+func TestReadyToBuySendsSingleNtfyNotification(t *testing.T) {
+	app := NewApp()
+	requestCount := 0
+	ntfyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		if r.Method != http.MethodPost {
+			t.Fatalf("expected POST, got %s", r.Method)
+		}
+		if got := r.URL.Path; got != "/impulse-pause" {
+			t.Fatalf("expected topic path /impulse-pause, got %s", got)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ntfyServer.Close()
+
+	app.mu.Lock()
+	app.ntfyURL = ntfyServer.URL
+	app.ntfyTopic = "impulse-pause"
+	app.items = append(app.items, Item{ID: 9, Title: "Laptop stand", Status: "Waiting", PurchaseAllowedAt: time.Now().Add(-time.Minute)})
+	app.mu.Unlock()
+
+	firstReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	firstRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(firstRR, firstReq)
+	if firstRR.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", firstRR.Code)
+	}
+
+	secondReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	secondRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(secondRR, secondReq)
+	if secondRR.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", secondRR.Code)
+	}
+
+	if requestCount != 1 {
+		t.Fatalf("expected exactly one ntfy request, got %d", requestCount)
+	}
+}
+
+func TestReadyToBuyWithoutNtfyConfigStillPromotesItem(t *testing.T) {
+	app := NewApp()
+
+	app.mu.Lock()
+	app.items = append(app.items, Item{ID: 11, Title: "Notebook", Status: "Waiting", PurchaseAllowedAt: time.Now().Add(-time.Minute)})
+	app.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if app.items[0].Status != "Ready to buy" {
+		t.Fatalf("expected item to be promoted, got %q", app.items[0].Status)
+	}
+	if !app.items[0].NtfyAttempted {
+		t.Fatalf("expected ntfy attempt flag to be set")
+	}
+}
+
+func TestReadyToBuyContinuesWhenNtfyFails(t *testing.T) {
+	app := NewApp()
+	requestCount := 0
+	ntfyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("upstream issue"))
+	}))
+	defer ntfyServer.Close()
+
+	app.mu.Lock()
+	app.ntfyURL = ntfyServer.URL
+	app.ntfyTopic = "impulse-pause"
+	app.items = append(app.items, Item{ID: 12, Title: "Phone holder", Status: "Waiting", PurchaseAllowedAt: time.Now().Add(-time.Minute)})
+	app.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if requestCount != 1 {
+		t.Fatalf("expected one ntfy request despite failure, got %d", requestCount)
+	}
+
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if app.items[0].Status != "Ready to buy" {
+		t.Fatalf("expected promoted status after ntfy failure, got %q", app.items[0].Status)
+	}
+}
+
+func TestProfilePersistsNtfySettings(t *testing.T) {
+	app := NewApp()
+	form := url.Values{}
+	form.Set("hourly_wage", "30")
+	form.Set("ntfy_endpoint", "https://ntfy.sh/")
+	form.Set("ntfy_topic", "impulse-pause")
+
+	req := httptest.NewRequest(http.MethodPost, "/settings/profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", rr.Code)
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/settings/profile", nil)
+	getRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(getRR, getReq)
+	body := getRR.Body.String()
+	if !strings.Contains(body, "value=\"https://ntfy.sh\"") {
+		t.Fatalf("expected saved ntfy endpoint in profile form")
+	}
+	if !strings.Contains(body, "value=\"impulse-pause\"") {
+		t.Fatalf("expected saved ntfy topic in profile form")
+	}
+}
 func TestParseWaitDuration(t *testing.T) {
 	tests := []struct {
 		name            string

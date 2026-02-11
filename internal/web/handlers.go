@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"math"
 	"net/http"
@@ -32,6 +33,7 @@ type Item struct {
 	WaitCustomHours   string
 	PurchaseAllowedAt time.Time
 	CreatedAt         time.Time
+	NtfyAttempted     bool
 }
 
 type homeViewData struct {
@@ -76,6 +78,8 @@ type profileViewData struct {
 	ContentTemplate string
 	ScriptTemplate  string
 	ProfileHourly   string
+	NtfyEndpoint    string
+	NtfyTopic       string
 	ProfileError    string
 	ProfileFeedback string
 }
@@ -93,6 +97,8 @@ type App struct {
 	mu         sync.RWMutex
 	items      []Item
 	hourlyWage string
+	ntfyURL    string
+	ntfyTopic  string
 	nextID     int
 }
 
@@ -262,12 +268,16 @@ func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	hourlyWage := strings.TrimSpace(r.FormValue("hourly_wage"))
+	ntfyURL := strings.TrimRight(strings.TrimSpace(r.FormValue("ntfy_endpoint")), "/")
+	ntfyTopic := strings.TrimSpace(r.FormValue("ntfy_topic"))
 	if _, err := parseHourlyWage(hourlyWage); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		a.renderProfile(w, profileViewData{
 			Title:         "Profile settings",
 			CurrentPath:   "/settings/profile",
 			ProfileHourly: hourlyWage,
+			NtfyEndpoint:  ntfyURL,
+			NtfyTopic:     ntfyTopic,
 			ProfileError:  err.Error(),
 		})
 		return
@@ -275,6 +285,8 @@ func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 
 	a.mu.Lock()
 	a.hourlyWage = hourlyWage
+	a.ntfyURL = ntfyURL
+	a.ntfyTopic = ntfyTopic
 	a.mu.Unlock()
 
 	http.Redirect(w, r, "/settings/profile?saved=1", http.StatusSeeOther)
@@ -391,6 +403,12 @@ func (a *App) renderProfile(w http.ResponseWriter, data profileViewData) {
 	if data.ProfileHourly == "" {
 		data.ProfileHourly = a.hourlyWage
 	}
+	if data.NtfyEndpoint == "" {
+		data.NtfyEndpoint = a.ntfyURL
+	}
+	if data.NtfyTopic == "" {
+		data.NtfyTopic = a.ntfyTopic
+	}
 	a.mu.RUnlock()
 
 	data.ContentTemplate = "profile_content"
@@ -422,7 +440,47 @@ func (a *App) promoteReadyItemsLocked(now time.Time) {
 		}
 		if !a.items[i].PurchaseAllowedAt.After(now) {
 			a.items[i].Status = "Ready to buy"
+			a.sendNtfyNotificationLocked(a.items[i])
 		}
+	}
+}
+
+func (a *App) sendNtfyNotificationLocked(item Item) {
+	if item.NtfyAttempted {
+		return
+	}
+
+	for i := range a.items {
+		if a.items[i].ID == item.ID {
+			a.items[i].NtfyAttempted = true
+			break
+		}
+	}
+
+	if strings.TrimSpace(a.ntfyURL) == "" || strings.TrimSpace(a.ntfyTopic) == "" {
+		log.Printf("ntfy skipped for item %d: endpoint/topic not configured", item.ID)
+		return
+	}
+
+	message := fmt.Sprintf("%s is now ready to buy.", item.Title)
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/%s", a.ntfyURL, a.ntfyTopic), strings.NewReader(message))
+	if err != nil {
+		log.Printf("ntfy request creation failed for item %d: %v", item.ID, err)
+		return
+	}
+	req.Header.Set("Content-Type", "text/plain; charset=utf-8")
+	req.Header.Set("Title", "Impulse Pause reminder")
+
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("ntfy request failed for item %d: %v", item.ID, err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= http.StatusInternalServerError {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		log.Printf("ntfy request returned %d for item %d: %s", resp.StatusCode, item.ID, strings.TrimSpace(string(body)))
 	}
 }
 

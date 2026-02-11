@@ -137,7 +137,7 @@ Als Nutzer:in möchte ich eine einfache Auswertung sehen, damit ich den Effekt m
 
 ---
 
-### MVP-007 — ntfy-Erinnerung bei „Kauf erlaubt“
+### (done) MVP-007 — ntfy-Erinnerung bei „Kauf erlaubt“
 **User Story**  
 Als Nutzer:in möchte ich bei Ablauf der Wartezeit eine Benachrichtigung erhalten, damit ich bewusst über den Kauf entscheiden kann.
 

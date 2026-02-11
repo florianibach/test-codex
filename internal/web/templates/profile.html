@@ -16,6 +16,14 @@
         <label for="hourly_wage" class="form-label">Net hourly wage</label>
         <input id="hourly_wage" name="hourly_wage" type="number" min="0.01" step="0.01" inputmode="decimal" class="form-control" placeholder="e.g. 25" value="{{.ProfileHourly}}" required />
       </div>
+      <div>
+        <label for="ntfy_endpoint" class="form-label">ntfy endpoint (optional)</label>
+        <input id="ntfy_endpoint" name="ntfy_endpoint" type="url" class="form-control" placeholder="https://ntfy.sh" value="{{.NtfyEndpoint}}" />
+      </div>
+      <div>
+        <label for="ntfy_topic" class="form-label">ntfy topic (optional)</label>
+        <input id="ntfy_topic" name="ntfy_topic" type="text" class="form-control" placeholder="impulse-pause" value="{{.NtfyTopic}}" />
+      </div>
       <button id="profile-save-btn" class="btn btn-outline-primary" type="submit">Save profile</button>
     </form>
   </div>
