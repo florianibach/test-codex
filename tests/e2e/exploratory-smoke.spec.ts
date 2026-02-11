@@ -208,6 +208,11 @@ test('MVP-004: profile hourly wage shows as value after save and can be edited',
 test('MVP-004: profile validates invalid hourly wage', async ({ page }) => {
   await page.goto('/');
 
+  const editButton = page.getByRole('button', { name: 'Edit' });
+  if (await editButton.isVisible()) {
+    await editButton.click();
+  }
+
   await page.getByLabel('Netto-Stundenlohn').fill('0');
 
   // Browser number constraints (min/required) can block submit before backend validation.
