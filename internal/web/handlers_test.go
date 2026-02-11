@@ -138,6 +138,66 @@ func TestCreateItemWithPresetWaitDuration(t *testing.T) {
 	}
 }
 
+func TestHomeShowsWorkHoursWhenPriceAndHourlyWageArePresent(t *testing.T) {
+	app := NewApp()
+
+	app.mu.Lock()
+	app.hourlyWage = "25"
+	app.items = append(app.items, Item{ID: 1, Title: "Headphones", Price: "100", Status: "Waiting", PurchaseAllowedAt: time.Now().Add(24 * time.Hour)})
+	app.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if body := rr.Body.String(); !strings.Contains(body, "Work hours: 4.0 h") {
+		t.Fatalf("expected work hours value in response body")
+	}
+}
+
+func TestHomeShowsNeutralWorkHoursHintWhenDataMissing(t *testing.T) {
+	app := NewApp()
+
+	app.mu.Lock()
+	app.items = append(app.items, Item{ID: 1, Title: "Headphones", Price: "100", Status: "Waiting", PurchaseAllowedAt: time.Now().Add(24 * time.Hour)})
+	app.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if body := rr.Body.String(); !strings.Contains(body, "Work hours: add a valid price and hourly wage.") {
+		t.Fatalf("expected neutral work hours hint in response body")
+	}
+}
+
+func TestHomeDoesNotShowWorkHoursSectionWithoutPrice(t *testing.T) {
+	app := NewApp()
+
+	app.mu.Lock()
+	app.hourlyWage = "25"
+	app.items = append(app.items, Item{ID: 1, Title: "Headphones", Status: "Waiting", PurchaseAllowedAt: time.Now().Add(24 * time.Hour)})
+	app.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	if strings.Contains(body, "Work hours:") {
+		t.Fatalf("did not expect work hours text without price")
+	}
+}
+
 func TestCreateItemValidationKeepsCustomHoursVisible(t *testing.T) {
 	app := NewApp()
 	form := url.Values{}
@@ -345,6 +405,28 @@ func TestParseWaitDuration(t *testing.T) {
 			}
 			if got != tt.wantDuration {
 				t.Fatalf("expected %s, got %s", tt.wantDuration, got)
+			}
+		})
+	}
+}
+
+func TestFormatWorkHoursRoundingBoundaries(t *testing.T) {
+	tests := []struct {
+		name       string
+		price      string
+		hourlyWage float64
+		want       string
+	}{
+		{name: "rounds down below midpoint", price: "30.4", hourlyWage: 10, want: "3.0"},
+		{name: "rounds up at midpoint", price: "30.5", hourlyWage: 10, want: "3.1"},
+		{name: "rounds up above midpoint", price: "30.6", hourlyWage: 10, want: "3.1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := formatWorkHours(Item{Price: tt.price}, tt.hourlyWage)
+			if got != tt.want {
+				t.Fatalf("expected %q, got %q", tt.want, got)
 			}
 		})
 	}
