@@ -446,6 +446,44 @@ func TestProfileCanBeSavedAndPersisted(t *testing.T) {
 	}
 }
 
+func TestProfileUpdateOverwritesExistingValue(t *testing.T) {
+	app := NewApp()
+
+	first := url.Values{}
+	first.Set("hourly_wage", "21")
+	firstReq := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(first.Encode()))
+	firstReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	firstRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(firstRR, firstReq)
+
+	if firstRR.Code != http.StatusOK {
+		t.Fatalf("expected first save status 200, got %d", firstRR.Code)
+	}
+
+	second := url.Values{}
+	second.Set("hourly_wage", "33")
+	secondReq := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(second.Encode()))
+	secondReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	secondRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(secondRR, secondReq)
+
+	if secondRR.Code != http.StatusOK {
+		t.Fatalf("expected second save status 200, got %d", secondRR.Code)
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	getRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(getRR, getReq)
+
+	body := getRR.Body.String()
+	if !strings.Contains(body, "<strong id=\"hourly-wage-value\">33</strong>") {
+		t.Fatalf("expected updated hourly wage in profile read view")
+	}
+	if strings.Contains(body, "<strong id=\"hourly-wage-value\">21</strong>") {
+		t.Fatalf("expected previous hourly wage not to remain in profile read view")
+	}
+}
+
 func TestProfileValidation(t *testing.T) {
 	app := NewApp()
 	form := url.Values{}
