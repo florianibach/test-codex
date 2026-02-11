@@ -117,7 +117,7 @@ Als Käufer:in möchte ich pro Item sehen, wie viele Arbeitsstunden der Preis en
 
 ---
 
-### MVP-006 — Basis-Auswertung (nicht gekauft, gespart, Top-Kategorien)
+### (done) MVP-006 — Basis-Auswertung (nicht gekauft, gespart, Top-Kategorien)
 **User Story**  
 Als Nutzer:in möchte ich eine einfache Auswertung sehen, damit ich den Effekt meiner Kaufpausen erkenne.
 

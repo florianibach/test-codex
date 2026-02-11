@@ -1,0 +1,46 @@
+{{define "insights_content"}}
+<section class="card shadow-sm mb-4">
+  <div class="card-body d-flex justify-content-between align-items-center gap-3 wrap-sm">
+    <div>
+      <h1 class="h3 mb-1">Insights</h1>
+      <p class="text-secondary mb-0">Track how your pause decisions impact your spending habits.</p>
+    </div>
+  </div>
+</section>
+
+<section class="card shadow-sm mb-4">
+  <div class="card-body">
+    {{if eq .ItemCount 0}}
+    <p class="text-secondary mb-0">No data yet. Add items and make decisions to unlock insights.</p>
+    {{else}}
+    <div class="d-flex gap-3 wrap-sm">
+      <article class="metric-card">
+        <p class="text-secondary small mb-1">Skipped items</p>
+        <p class="h3 mb-0">{{.SkippedCount}}</p>
+      </article>
+      <article class="metric-card">
+        <p class="text-secondary small mb-1">Saved total</p>
+        <p class="h3 mb-0">{{printf "%.2f" .SavedAmount}}</p>
+      </article>
+    </div>
+    {{end}}
+  </div>
+</section>
+
+<section class="card shadow-sm">
+  <div class="card-body">
+    <h2 class="h5 mb-3">Top categories</h2>
+    {{if eq .ItemCount 0}}
+    <p class="text-secondary mb-0">No categories yet.</p>
+    {{else if .TopCategories}}
+    <div class="d-flex gap-2 wrap-sm" aria-label="Top categories">
+      {{range .TopCategories}}
+      <span class="badge text-bg-primary category-pill">{{.Name}} · {{.Count}}</span>
+      {{end}}
+    </div>
+    {{else}}
+    <p class="text-secondary mb-0">No categories yet.</p>
+    {{end}}
+  </div>
+</section>
+{{end}}
