@@ -194,7 +194,8 @@ test('MVP-004: profile hourly wage shows as value after save and can be edited',
   await expect(page.getByRole('status')).toContainText('Profil gespeichert.');
   await expect(page.locator('#hourly-wage-value')).toHaveText('31.5');
   await expect(page.getByRole('button', { name: 'Edit' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Profil speichern' })).toHaveCount(0);
+  await expect(page.locator('#profile-edit-form')).toBeHidden();
+  await expect(page.locator('#profile-save-btn')).toBeHidden();
 
   await page.getByRole('button', { name: 'Edit' }).click();
   await expect(page.getByLabel('Netto-Stundenlohn')).toHaveValue('31.5');
@@ -202,7 +203,8 @@ test('MVP-004: profile hourly wage shows as value after save and can be edited',
 
   await page.reload();
   await expect(page.locator('#hourly-wage-value')).toHaveText('31.5');
-  await expect(page.getByRole('button', { name: 'Profil speichern' })).toHaveCount(0);
+  await expect(page.locator('#profile-edit-form')).toBeHidden();
+  await expect(page.locator('#profile-save-btn')).toBeHidden();
 });
 
 test('MVP-004: profile validates invalid hourly wage', async ({ page }) => {
