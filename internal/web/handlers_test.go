@@ -395,6 +395,7 @@ func TestParseWaitDuration(t *testing.T) {
 		{name: "7d", preset: "7d", wantDuration: 7 * 24 * time.Hour},
 		{name: "30d", preset: "30d", wantDuration: 30 * 24 * time.Hour},
 		{name: "custom", preset: "custom", customHours: "5", wantDuration: 5 * time.Hour},
+		{name: "custom decimal", preset: "custom", customHours: "0.5", wantDuration: 30 * time.Minute},
 		{name: "invalid custom", preset: "custom", customHours: "0", wantErrContains: "gültige Anzahl Stunden"},
 		{name: "invalid preset", preset: "abc", wantErrContains: "gültige Wartezeit"},
 	}

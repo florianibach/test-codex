@@ -201,11 +201,11 @@ func parseWaitDuration(waitPreset string, waitCustomHours string) (time.Duration
 	case "30d":
 		return 30 * 24 * time.Hour, nil
 	case "custom":
-		hours, err := strconv.Atoi(strings.TrimSpace(waitCustomHours))
+		hours, err := strconv.ParseFloat(strings.TrimSpace(waitCustomHours), 64)
 		if err != nil || hours <= 0 {
 			return 0, errors.New("Bitte gib für Custom eine gültige Anzahl Stunden (> 0) ein.")
 		}
-		return time.Duration(hours) * time.Hour, nil
+		return time.Duration(hours * float64(time.Hour)), nil
 	default:
 		return 0, errors.New("Bitte wähle eine gültige Wartezeit aus.")
 	}
