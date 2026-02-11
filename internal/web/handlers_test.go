@@ -524,6 +524,70 @@ func TestInsightsPageShowsZeroStateWhenNoItems(t *testing.T) {
 	}
 }
 
+func TestInsightsMetricsUpdateAfterStatusChange(t *testing.T) {
+	app := NewApp()
+
+	app.mu.Lock()
+	app.items = append(app.items, Item{
+		ID:                77,
+		Title:             "Noise-cancelling headphones",
+		Price:             "199",
+		PriceValue:        199,
+		HasPriceValue:     true,
+		Tags:              "Tech",
+		Status:            "Ready to buy",
+		CreatedAt:         time.Now().Add(-48 * time.Hour),
+		PurchaseAllowedAt: time.Now().Add(-24 * time.Hour),
+	})
+	app.mu.Unlock()
+
+	beforeReq := httptest.NewRequest(http.MethodGet, "/insights", nil)
+	beforeRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(beforeRR, beforeReq)
+
+	if beforeRR.Code != http.StatusOK {
+		t.Fatalf("expected 200 before status change, got %d", beforeRR.Code)
+	}
+	beforeBody := beforeRR.Body.String()
+	if !strings.Contains(beforeBody, "Skipped items") || !strings.Contains(beforeBody, ">0<") {
+		t.Fatalf("expected skipped metric to be zero before status change")
+	}
+	if !strings.Contains(beforeBody, "Saved total") || !strings.Contains(beforeBody, "0.00") {
+		t.Fatalf("expected saved metric to be zero before status change")
+	}
+
+	form := url.Values{}
+	form.Set("item_id", "77")
+	form.Set("status", "Skipped")
+
+	statusReq := httptest.NewRequest(http.MethodPost, "/items/status", strings.NewReader(form.Encode()))
+	statusReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	statusRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(statusRR, statusReq)
+
+	if statusRR.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 on status update, got %d", statusRR.Code)
+	}
+
+	afterReq := httptest.NewRequest(http.MethodGet, "/insights", nil)
+	afterRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(afterRR, afterReq)
+
+	if afterRR.Code != http.StatusOK {
+		t.Fatalf("expected 200 after status change, got %d", afterRR.Code)
+	}
+	afterBody := afterRR.Body.String()
+	if !strings.Contains(afterBody, "Skipped items") || !strings.Contains(afterBody, ">1<") {
+		t.Fatalf("expected skipped metric to update after status change")
+	}
+	if !strings.Contains(afterBody, "Saved total") || !strings.Contains(afterBody, "199.00") {
+		t.Fatalf("expected saved metric to update after status change")
+	}
+	if !strings.Contains(afterBody, "tech · 1") {
+		t.Fatalf("expected top categories to update after status change")
+	}
+}
+
 func TestBuildDashboardStatsSortsAndLimitsCategories(t *testing.T) {
 	items := []Item{
 		{Tags: "gamma"},
