@@ -19,8 +19,15 @@ func TestHomeRoute(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rr.Code)
 	}
-	if body := rr.Body.String(); !strings.Contains(body, "Waitlist dashboard") {
+	body := rr.Body.String()
+	if !strings.Contains(body, "Waitlist dashboard") {
 		t.Fatalf("expected dashboard content")
+	}
+	if !strings.Contains(body, ">Settings<") {
+		t.Fatalf("expected settings navigation in title bar")
+	}
+	if strings.Contains(body, "Profile status") {
+		t.Fatalf("did not expect profile status card on dashboard")
 	}
 }
 
@@ -265,11 +272,11 @@ func TestProfileCanBeSavedAndPersisted(t *testing.T) {
 		t.Fatalf("unexpected redirect location %q", got)
 	}
 
-	getReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	getReq := httptest.NewRequest(http.MethodGet, "/settings/profile", nil)
 	getRR := httptest.NewRecorder()
 	app.Handler().ServeHTTP(getRR, getReq)
-	if body := getRR.Body.String(); !strings.Contains(body, "id=\"hourly-wage-value\">42.5</strong>") {
-		t.Fatalf("expected saved wage visible on dashboard")
+	if body := getRR.Body.String(); !strings.Contains(body, "value=\"42.5\"") {
+		t.Fatalf("expected saved wage visible on profile settings")
 	}
 }
 
