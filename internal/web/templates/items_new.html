@@ -1,100 +1,83 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{{.Title}}</title>
-  <link href="/assets/app.css" rel="stylesheet">
-</head>
-<body class="bg-body-tertiary">
-  <main class="container py-3 py-md-4" style="max-width: 720px;">
-    <header class="d-flex justify-content-between align-items-center mb-3 page-header">
+{{define "items_new_content"}}
+<section class="card shadow-sm mb-4">
+  <div class="card-body">
+    <h1 class="h3 mb-1">Add item</h1>
+    <p class="text-secondary mb-3">Capture quickly now, enrich details later.</p>
+
+    {{if .Error}}
+    <div class="alert alert-danger py-2" role="alert">{{.Error}}</div>
+    {{end}}
+
+    <form method="post" action="/items/new" class="vstack gap-3">
       <div>
-        <h1 class="h3 mb-1">Add item</h1>
-        <p class="text-secondary mb-0">Capture quickly now, enrich details later.</p>
+        <label for="title" class="form-label">Title <span class="text-danger">*</span></label>
+        <input id="title" name="title" class="form-control form-control-lg" autocomplete="off" required placeholder="e.g. New headphones" value="{{.FormValues.Title}}" />
       </div>
-      <a class="btn btn-outline-secondary btn-sm" href="/">Back to waitlist</a>
-    </header>
 
-    <section class="card shadow-sm mb-4">
-      <div class="card-body">
-        <h2 class="h5 card-title">Quick capture</h2>
-        <p class="text-secondary small">Only title is required.</p>
-
-        {{if .Error}}
-        <div class="alert alert-danger py-2" role="alert">{{.Error}}</div>
-        {{end}}
-
-        <form method="post" action="/items/new" class="vstack gap-3">
-          <div>
-            <label for="title" class="form-label">Title <span class="text-danger">*</span></label>
-            <input id="title" name="title" class="form-control form-control-lg" autocomplete="off" required placeholder="e.g. New headphones" value="{{.FormValues.Title}}" />
-          </div>
-
-          <div>
-            <label for="wait_preset" class="form-label">Wait time</label>
-            <select id="wait_preset" name="wait_preset" class="form-select">
-              <option value="24h" {{if or (eq .FormValues.WaitPreset "") (eq .FormValues.WaitPreset "24h")}}selected{{end}}>24h</option>
-              <option value="7d" {{if eq .FormValues.WaitPreset "7d"}}selected{{end}}>7 days</option>
-              <option value="30d" {{if eq .FormValues.WaitPreset "30d"}}selected{{end}}>30 days</option>
-              <option value="custom" {{if eq .FormValues.WaitPreset "custom"}}selected{{end}}>Custom</option>
-            </select>
-          </div>
-
-          <div id="custom-hours-group" {{if ne .FormValues.WaitPreset "custom"}}hidden{{end}}>
-            <label for="wait_custom_hours" class="form-label">Custom hours</label>
-            <input id="wait_custom_hours" name="wait_custom_hours" type="number" min="0.0001" step="any" class="form-control" placeholder="e.g. 12" value="{{.FormValues.WaitCustomHours}}" {{if ne .FormValues.WaitPreset "custom"}}disabled{{end}} />
-          </div>
-
-          <details>
-            <summary class="text-primary">Optional fields</summary>
-            <div class="pt-3 vstack gap-3">
-              <div>
-                <label for="price" class="form-label">Price</label>
-                <input id="price" name="price" class="form-control" placeholder="e.g. 129.99" value="{{.FormValues.Price}}" />
-              </div>
-              <div>
-                <label for="link" class="form-label">Link</label>
-                <input id="link" name="link" class="form-control" placeholder="https://..." value="{{.FormValues.Link}}" />
-              </div>
-              <div>
-                <label for="tags" class="form-label">Tags</label>
-                <input id="tags" name="tags" class="form-control" placeholder="Tech, Audio" value="{{.FormValues.Tags}}" />
-              </div>
-              <div>
-                <label for="note" class="form-label">Note</label>
-                <textarea id="note" name="note" class="form-control" rows="2" placeholder="Why do you want to buy this?">{{.FormValues.Note}}</textarea>
-              </div>
-            </div>
-          </details>
-
-          <button class="btn btn-primary btn-lg" type="submit">Add to waitlist</button>
-        </form>
+      <div>
+        <label for="wait_preset" class="form-label">Wait time</label>
+        <select id="wait_preset" name="wait_preset" class="form-select">
+          <option value="24h" {{if or (eq .FormValues.WaitPreset "") (eq .FormValues.WaitPreset "24h")}}selected{{end}}>24h</option>
+          <option value="7d" {{if eq .FormValues.WaitPreset "7d"}}selected{{end}}>7 days</option>
+          <option value="30d" {{if eq .FormValues.WaitPreset "30d"}}selected{{end}}>30 days</option>
+          <option value="custom" {{if eq .FormValues.WaitPreset "custom"}}selected{{end}}>Custom</option>
+        </select>
       </div>
-    </section>
-  </main>
 
-  <script>
-    (function () {
-      var waitPreset = document.getElementById("wait_preset");
-      var customHoursGroup = document.getElementById("custom-hours-group");
-      var customHoursInput = document.getElementById("wait_custom_hours");
+      <div id="custom-hours-group" {{if ne .FormValues.WaitPreset "custom"}}hidden{{end}}>
+        <label for="wait_custom_hours" class="form-label">Custom hours</label>
+        <input id="wait_custom_hours" name="wait_custom_hours" type="number" min="0.0001" step="any" class="form-control" placeholder="e.g. 12" value="{{.FormValues.WaitCustomHours}}" {{if ne .FormValues.WaitPreset "custom"}}disabled{{end}} />
+      </div>
 
-      function syncCustomHoursVisibility() {
-        if (!waitPreset || !customHoursGroup || !customHoursInput) {
-          return;
-        }
+      <details>
+        <summary class="text-primary">Optional fields</summary>
+        <div class="pt-3 vstack gap-3">
+          <div>
+            <label for="price" class="form-label">Price</label>
+            <input id="price" name="price" class="form-control" placeholder="e.g. 129.99" value="{{.FormValues.Price}}" />
+          </div>
+          <div>
+            <label for="link" class="form-label">Link</label>
+            <input id="link" name="link" class="form-control" placeholder="https://..." value="{{.FormValues.Link}}" />
+          </div>
+          <div>
+            <label for="tags" class="form-label">Tags</label>
+            <input id="tags" name="tags" class="form-control" placeholder="Tech, Audio" value="{{.FormValues.Tags}}" />
+          </div>
+          <div>
+            <label for="note" class="form-label">Note</label>
+            <textarea id="note" name="note" class="form-control" rows="2" placeholder="Why do you want to buy this?">{{.FormValues.Note}}</textarea>
+          </div>
+        </div>
+      </details>
 
-        var isCustom = waitPreset.value === "custom";
-        customHoursGroup.hidden = !isCustom;
-        customHoursInput.disabled = !isCustom;
+      <button class="btn btn-primary btn-lg" type="submit">Add to waitlist</button>
+    </form>
+  </div>
+</section>
+{{end}}
+
+{{define "items_new_script"}}
+<script>
+  (function () {
+    var waitPreset = document.getElementById("wait_preset");
+    var customHoursGroup = document.getElementById("custom-hours-group");
+    var customHoursInput = document.getElementById("wait_custom_hours");
+
+    function syncCustomHoursVisibility() {
+      if (!waitPreset || !customHoursGroup || !customHoursInput) {
+        return;
       }
 
-      if (waitPreset) {
-        waitPreset.addEventListener("change", syncCustomHoursVisibility);
-      }
-      syncCustomHoursVisibility();
-    })();
-  </script>
-</body>
-</html>
+      var isCustom = waitPreset.value === "custom";
+      customHoursGroup.hidden = !isCustom;
+      customHoursInput.disabled = !isCustom;
+    }
+
+    if (waitPreset) {
+      waitPreset.addEventListener("change", syncCustomHoursVisibility);
+    }
+    syncCustomHoursVisibility();
+  })();
+</script>
+{{end}}

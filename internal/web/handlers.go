@@ -31,28 +31,38 @@ type Item struct {
 }
 
 type homeViewData struct {
-	Title             string
-	Items             []Item
-	ProfileConfigured bool
-	ProfileHourly     string
+	Title           string
+	CurrentPath     string
+	ContentTemplate string
+	ScriptTemplate  string
+	Items           []Item
 }
 
 type itemFormViewData struct {
-	Title      string
-	Items      []Item
-	FormValues Item
-	Error      string
+	Title           string
+	CurrentPath     string
+	ContentTemplate string
+	ScriptTemplate  string
+	Items           []Item
+	FormValues      Item
+	Error           string
 }
 
 type profileViewData struct {
 	Title           string
+	CurrentPath     string
+	ContentTemplate string
+	ScriptTemplate  string
 	ProfileHourly   string
 	ProfileError    string
 	ProfileFeedback string
 }
 
 type pageData struct {
-	Title string
+	Title           string
+	CurrentPath     string
+	ContentTemplate string
+	ScriptTemplate  string
 }
 
 type App struct {
@@ -99,7 +109,7 @@ func (a *App) home(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet, http.MethodHead:
-		a.renderHome(w, homeViewData{Title: "Impulse Pause"})
+		a.renderHome(w, homeViewData{Title: "Impulse Pause", CurrentPath: "/"})
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -108,7 +118,7 @@ func (a *App) home(w http.ResponseWriter, r *http.Request) {
 func (a *App) itemForm(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet, http.MethodHead:
-		a.renderItemForm(w, itemFormViewData{Title: "Add item"})
+		a.renderItemForm(w, itemFormViewData{Title: "Add item", CurrentPath: "/items/new"})
 	case http.MethodPost:
 		a.createItem(w, r)
 	default:
@@ -135,9 +145,10 @@ func (a *App) createItem(w http.ResponseWriter, r *http.Request) {
 	if item.Title == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		a.renderItemForm(w, itemFormViewData{
-			Title:      "Add item",
-			FormValues: item,
-			Error:      "Please enter a title.",
+			Title:       "Add item",
+			CurrentPath: "/items/new",
+			FormValues:  item,
+			Error:       "Please enter a title.",
 		})
 		return
 	}
@@ -146,9 +157,10 @@ func (a *App) createItem(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		a.renderItemForm(w, itemFormViewData{
-			Title:      "Add item",
-			FormValues: item,
-			Error:      err.Error(),
+			Title:       "Add item",
+			CurrentPath: "/items/new",
+			FormValues:  item,
+			Error:       err.Error(),
 		})
 		return
 	}
@@ -174,6 +186,7 @@ func (a *App) profileSettings(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet, http.MethodHead:
 		a.renderProfile(w, profileViewData{
 			Title:           "Profile settings",
+			CurrentPath:     "/settings/profile",
 			ProfileFeedback: feedbackFromQuery(r),
 		})
 	case http.MethodPost:
@@ -209,6 +222,7 @@ func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		a.renderProfile(w, profileViewData{
 			Title:         "Profile settings",
+			CurrentPath:   "/settings/profile",
 			ProfileHourly: hourlyWage,
 			ProfileError:  err.Error(),
 		})
@@ -295,11 +309,11 @@ func (a *App) renderHome(w http.ResponseWriter, data homeViewData) {
 	a.mu.Lock()
 	a.promoteReadyItemsLocked(time.Now())
 	data.Items = append([]Item(nil), a.items...)
-	data.ProfileHourly = a.hourlyWage
-	data.ProfileConfigured = a.hourlyWage != ""
+	data.ContentTemplate = "index_content"
+	data.ScriptTemplate = "index_script"
 	a.mu.Unlock()
 
-	renderTemplate(w, a.templates, "index.html", data)
+	renderTemplate(w, a.templates, "layout", data)
 }
 
 func (a *App) renderItemForm(w http.ResponseWriter, data itemFormViewData) {
@@ -308,7 +322,9 @@ func (a *App) renderItemForm(w http.ResponseWriter, data itemFormViewData) {
 	data.Items = append([]Item(nil), a.items...)
 	a.mu.Unlock()
 
-	renderTemplate(w, a.templates, "items_new.html", data)
+	data.ContentTemplate = "items_new_content"
+	data.ScriptTemplate = "items_new_script"
+	renderTemplate(w, a.templates, "layout", data)
 }
 
 func (a *App) renderProfile(w http.ResponseWriter, data profileViewData) {
@@ -318,7 +334,8 @@ func (a *App) renderProfile(w http.ResponseWriter, data profileViewData) {
 	}
 	a.mu.RUnlock()
 
-	renderTemplate(w, a.templates, "profile.html", data)
+	data.ContentTemplate = "profile_content"
+	renderTemplate(w, a.templates, "layout", data)
 }
 
 func parseHourlyWage(raw string) (float64, error) {
@@ -355,7 +372,7 @@ func statusBadgeClass(status string) string {
 }
 
 func (a *App) about(w http.ResponseWriter, r *http.Request) {
-	renderTemplate(w, a.templates, "about.html", pageData{Title: "About"})
+	renderTemplate(w, a.templates, "layout", pageData{Title: "About", CurrentPath: "/about", ContentTemplate: "about_content"})
 }
 
 func (a *App) health(w http.ResponseWriter, r *http.Request) {

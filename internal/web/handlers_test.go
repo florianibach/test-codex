@@ -53,7 +53,7 @@ func TestItemsNewRouteGet(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rr.Code)
 	}
-	if body := rr.Body.String(); !strings.Contains(body, "Quick capture") {
+	if body := rr.Body.String(); !strings.Contains(body, "Add item") {
 		t.Fatalf("expected add-item form on /items/new")
 	}
 }
