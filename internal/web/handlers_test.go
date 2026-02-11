@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestHomeRoute(t *testing.T) {
@@ -97,6 +98,125 @@ func TestCreateItemValidation(t *testing.T) {
 	}
 	if body := rr.Body.String(); !strings.Contains(body, "Bitte gib einen Titel ein.") {
 		t.Fatalf("expected validation message in response body")
+	}
+}
+
+func TestCreateItemWithPresetWaitDuration(t *testing.T) {
+	app := NewApp()
+	form := url.Values{}
+	form.Set("title", "Espressomaschine")
+	form.Set("wait_preset", "7d")
+
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", rr.Code)
+	}
+
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if len(app.items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(app.items))
+	}
+	item := app.items[0]
+	if item.WaitPreset != "7d" {
+		t.Fatalf("expected wait preset 7d, got %q", item.WaitPreset)
+	}
+	delta := item.PurchaseAllowedAt.Sub(item.CreatedAt)
+	if delta != 7*24*time.Hour {
+		t.Fatalf("expected 168h wait duration, got %s", delta)
+	}
+}
+
+func TestCreateItemWithCustomWaitDuration(t *testing.T) {
+	app := NewApp()
+	form := url.Values{}
+	form.Set("title", "Gaming Maus")
+	form.Set("wait_preset", "custom")
+	form.Set("wait_custom_hours", "12")
+
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", rr.Code)
+	}
+
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	item := app.items[0]
+	if item.WaitPreset != "custom" {
+		t.Fatalf("expected wait preset custom, got %q", item.WaitPreset)
+	}
+	if item.WaitCustomHours != "12" {
+		t.Fatalf("expected custom hours 12, got %q", item.WaitCustomHours)
+	}
+	if got := item.PurchaseAllowedAt.Sub(item.CreatedAt); got != 12*time.Hour {
+		t.Fatalf("expected 12h wait duration, got %s", got)
+	}
+}
+
+func TestCreateItemValidationForCustomWaitDuration(t *testing.T) {
+	app := NewApp()
+	form := url.Values{}
+	form.Set("title", "Schreibtisch")
+	form.Set("wait_preset", "custom")
+	form.Set("wait_custom_hours", "0")
+
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+	if body := rr.Body.String(); !strings.Contains(body, "gültige Anzahl Stunden") {
+		t.Fatalf("expected custom validation message in response body")
+	}
+}
+
+func TestParseWaitDuration(t *testing.T) {
+	tests := []struct {
+		name            string
+		preset          string
+		customHours     string
+		wantDuration    time.Duration
+		wantErrContains string
+	}{
+		{name: "default", preset: "", wantDuration: 24 * time.Hour},
+		{name: "24h", preset: "24h", wantDuration: 24 * time.Hour},
+		{name: "7d", preset: "7d", wantDuration: 7 * 24 * time.Hour},
+		{name: "30d", preset: "30d", wantDuration: 30 * 24 * time.Hour},
+		{name: "custom", preset: "custom", customHours: "5", wantDuration: 5 * time.Hour},
+		{name: "invalid custom", preset: "custom", customHours: "0", wantErrContains: "gültige Anzahl Stunden"},
+		{name: "invalid preset", preset: "abc", wantErrContains: "gültige Wartezeit"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseWaitDuration(tt.preset, tt.customHours)
+			if tt.wantErrContains != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErrContains) {
+					t.Fatalf("expected error containing %q, got %v", tt.wantErrContains, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.wantDuration {
+				t.Fatalf("expected %s, got %s", tt.wantDuration, got)
+			}
+		})
 	}
 }
 

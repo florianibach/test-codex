@@ -80,3 +80,42 @@ test('MVP-001: empty title shows validation', async ({ page }) => {
 
   await expect(page.getByRole('alert')).toContainText('Bitte gib einen Titel ein.');
 });
+
+
+test('MVP-002: wait presets are available and 7 Tage can be selected', async ({ page }) => {
+  await page.goto('/');
+
+  const waitSelect = page.getByLabel('Wartezeit');
+  await expect(waitSelect).toBeVisible();
+  await expect(waitSelect.locator('option')).toHaveText(['24h', '7 Tage', '30 Tage', 'Custom']);
+
+  await waitSelect.selectOption('7d');
+  await page.getByLabel('Titel *').fill('Laufschuhe');
+  await page.getByRole('button', { name: 'Zur Warteliste hinzufügen' }).click();
+
+  await expect(page.getByText('Laufschuhe')).toBeVisible();
+  await expect(page.getByText('Kauf erlaubt ab:')).toBeVisible();
+});
+
+test('MVP-002: custom wait duration accepts positive hours', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByLabel('Wartezeit').selectOption('custom');
+  await page.getByLabel('Custom (Stunden)').fill('12');
+  await page.getByLabel('Titel *').fill('Bücherregal');
+  await page.getByRole('button', { name: 'Zur Warteliste hinzufügen' }).click();
+
+  await expect(page.getByText('Bücherregal')).toBeVisible();
+  await expect(page.getByText('Wartet')).toBeVisible();
+});
+
+test('MVP-002: custom wait duration validates invalid values', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByLabel('Wartezeit').selectOption('custom');
+  await page.getByLabel('Custom (Stunden)').fill('0');
+  await page.getByLabel('Titel *').fill('Schallplatte');
+  await page.getByRole('button', { name: 'Zur Warteliste hinzufügen' }).click();
+
+  await expect(page.getByRole('alert')).toContainText('Bitte gib für Custom eine gültige Anzahl Stunden (> 0) ein.');
+});

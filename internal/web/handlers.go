@@ -2,9 +2,11 @@ package web
 
 import (
 	"embed"
+	"errors"
 	"html/template"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -14,13 +16,16 @@ import (
 var embeddedFiles embed.FS
 
 type Item struct {
-	Title     string
-	Price     string
-	Link      string
-	Note      string
-	Tags      string
-	Status    string
-	CreatedAt time.Time
+	Title             string
+	Price             string
+	Link              string
+	Note              string
+	Tags              string
+	Status            string
+	WaitPreset        string
+	WaitCustomHours   string
+	PurchaseAllowedAt time.Time
+	CreatedAt         time.Time
 }
 
 type homeViewData struct {
@@ -85,11 +90,13 @@ func (a *App) createItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	item := Item{
-		Title: strings.TrimSpace(r.FormValue("title")),
-		Price: strings.TrimSpace(r.FormValue("price")),
-		Link:  strings.TrimSpace(r.FormValue("link")),
-		Note:  strings.TrimSpace(r.FormValue("note")),
-		Tags:  strings.TrimSpace(r.FormValue("tags")),
+		Title:           strings.TrimSpace(r.FormValue("title")),
+		Price:           strings.TrimSpace(r.FormValue("price")),
+		Link:            strings.TrimSpace(r.FormValue("link")),
+		Note:            strings.TrimSpace(r.FormValue("note")),
+		Tags:            strings.TrimSpace(r.FormValue("tags")),
+		WaitPreset:      strings.TrimSpace(r.FormValue("wait_preset")),
+		WaitCustomHours: strings.TrimSpace(r.FormValue("wait_custom_hours")),
 	}
 
 	if item.Title == "" {
@@ -102,14 +109,52 @@ func (a *App) createItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	waitDuration, err := parseWaitDuration(item.WaitPreset, item.WaitCustomHours)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		a.renderHome(w, homeViewData{
+			Title:      "Impulse Pause",
+			FormValues: item,
+			Error:      err.Error(),
+		})
+		return
+	}
+
 	item.Status = "Wartet"
+	if item.WaitPreset == "" {
+		item.WaitPreset = "24h"
+	}
 	item.CreatedAt = time.Now()
+	item.PurchaseAllowedAt = item.CreatedAt.Add(waitDuration)
 
 	a.mu.Lock()
 	a.items = append([]Item{item}, a.items...)
 	a.mu.Unlock()
 
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func parseWaitDuration(waitPreset string, waitCustomHours string) (time.Duration, error) {
+	if waitPreset == "" {
+		waitPreset = "24h"
+	}
+
+	switch waitPreset {
+	case "24h":
+		return 24 * time.Hour, nil
+	case "7d":
+		return 7 * 24 * time.Hour, nil
+	case "30d":
+		return 30 * 24 * time.Hour, nil
+	case "custom":
+		hours, err := strconv.Atoi(strings.TrimSpace(waitCustomHours))
+		if err != nil || hours <= 0 {
+			return 0, errors.New("Bitte gib für Custom eine gültige Anzahl Stunden (> 0) ein.")
+		}
+		return time.Duration(hours) * time.Hour, nil
+	default:
+		return 0, errors.New("Bitte wähle eine gültige Wartezeit aus.")
+	}
 }
 
 func (a *App) renderHome(w http.ResponseWriter, data homeViewData) {

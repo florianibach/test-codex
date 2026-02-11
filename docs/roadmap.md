@@ -40,7 +40,7 @@ Als Käufer:in möchte ich ein Item mit minimalen Eingaben sehr schnell erfassen
 
 ---
 
-### MVP-002 — Wartezeit-Auswahl inkl. Custom
+### (done) MVP-002 — Wartezeit-Auswahl inkl. Custom
 **User Story**  
 Als Käufer:in möchte ich beim Anlegen eine Wartezeit auswählen, damit das Item erst nach einer bewussten Pause kaufbar ist.
 
