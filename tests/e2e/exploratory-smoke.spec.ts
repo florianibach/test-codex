@@ -126,3 +126,53 @@ test('MVP-002: custom wait duration validates invalid values', async ({ page }) 
 
   await expect(page.getByRole('alert')).toContainText('gültige Anzahl Stunden');
 });
+
+test('MVP-002: custom hours field is only visible when preset is custom', async ({ page }) => {
+  await page.goto('/');
+
+  const customHoursGroup = page.locator('#custom-hours-group');
+  const customHoursInput = page.locator('#wait_custom_hours');
+
+  await expect(customHoursGroup).toBeHidden();
+  await expect(customHoursInput).toBeDisabled();
+
+  await page.getByLabel('Wartezeit').selectOption('custom');
+  await expect(customHoursGroup).toBeVisible();
+  await expect(customHoursInput).toBeEnabled();
+
+  await page.getByLabel('Wartezeit').selectOption('24h');
+  await expect(customHoursGroup).toBeHidden();
+  await expect(customHoursInput).toBeDisabled();
+});
+
+test('MVP-002: purchase-allowed timestamp is rendered in browser locale from datetime attribute', async ({ page }) => {
+  await page.goto('/');
+
+  const title = uniqueTitle('Locale Test');
+  await page.getByLabel('Titel *').fill(title);
+  await page.getByRole('button', { name: 'Zur Warteliste hinzufügen' }).click();
+
+  const itemRow = page.locator('li.list-group-item').filter({ hasText: title }).first();
+  const timeElement = itemRow.locator('time.purchase-allowed-at');
+
+  await expect(timeElement).toBeVisible();
+
+  const rawDatetime = await timeElement.getAttribute('datetime');
+  expect(rawDatetime, 'datetime attribute should be present').toBeTruthy();
+
+  const expectedText = await page.evaluate((iso) => {
+    if (!iso) {
+      return '';
+    }
+
+    return new Intl.DateTimeFormat(navigator.language, {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(iso));
+  }, rawDatetime);
+
+  await expect(timeElement).toHaveText(expectedText);
+});

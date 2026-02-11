@@ -184,6 +184,52 @@ func TestCreateItemValidationForCustomWaitDuration(t *testing.T) {
 	}
 }
 
+func TestHomeRouteHidesCustomHoursByDefault(t *testing.T) {
+	app := NewApp()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "id=\"custom-hours-group\" hidden") {
+		t.Fatalf("expected custom hours group to be hidden by default")
+	}
+	if !strings.Contains(body, "id=\"wait_custom_hours\"") || !strings.Contains(body, "disabled") {
+		t.Fatalf("expected custom hours input to be disabled by default")
+	}
+}
+
+func TestCreateItemValidationKeepsCustomHoursVisible(t *testing.T) {
+	app := NewApp()
+	form := url.Values{}
+	form.Set("title", "Schreibtisch")
+	form.Set("wait_preset", "custom")
+	form.Set("wait_custom_hours", "0")
+
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+
+	body := rr.Body.String()
+	if strings.Contains(body, "id=\"custom-hours-group\" hidden") {
+		t.Fatalf("expected custom hours group to stay visible on custom validation error")
+	}
+	if strings.Contains(body, "id=\"wait_custom_hours\" name=\"wait_custom_hours\" type=\"number\" class=\"form-control\" placeholder=\"z. B. 12\" value=\"0\" disabled") {
+		t.Fatalf("expected custom hours input to remain enabled on custom validation error")
+	}
+}
+
 func TestParseWaitDuration(t *testing.T) {
 	tests := []struct {
 		name            string
