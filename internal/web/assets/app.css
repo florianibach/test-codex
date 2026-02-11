@@ -141,3 +141,32 @@ details > summary { cursor: pointer; }
 
 
 .bg-body-tertiary { background-color: var(--bg-body-tertiary); }
+
+
+.d-inline { display: inline; }
+.flex-column { flex-direction: column; }
+.gap-1 { gap: .25rem; }
+.gap-2 { gap: .5rem; }
+.mt-2 { margin-top: .5rem; }
+.wrap-sm { flex-wrap: wrap; }
+
+.btn-outline-primary { color: var(--primary); border-color: var(--primary); background: transparent; }
+.btn-outline-primary:hover { color: #fff; background-color: var(--primary); text-decoration: none; }
+
+.alert-success { color: #0f5132; background-color: #d1e7dd; border-color: #badbcc; }
+
+a:focus-visible,
+.btn:focus-visible,
+.form-control:focus-visible,
+.form-select:focus-visible,
+summary:focus-visible {
+  outline: 3px solid rgba(13, 110, 253, 0.35);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .page-header {
+    align-items: flex-start;
+    gap: .75rem;
+  }
+}

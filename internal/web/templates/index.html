@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -8,101 +8,34 @@
 </head>
 <body class="bg-body-tertiary">
   <main class="container py-3 py-md-4" style="max-width: 720px;">
-    <header class="d-flex justify-content-between align-items-center mb-3">
+    <header class="d-flex justify-content-between align-items-center mb-3 page-header">
       <div>
         <h1 class="h3 mb-1">Impulse Pause</h1>
-        <p class="text-secondary mb-0">Leite spontane Käufe in die Warteliste um.</p>
+        <p class="text-secondary mb-0">Review your waitlist first, add only when needed.</p>
       </div>
       <a class="btn btn-outline-secondary btn-sm" href="/about">About</a>
     </header>
 
     <section class="card shadow-sm mb-4">
-      <div class="card-body">
-        <h2 class="h5 card-title">Item schnell erfassen</h2>
-        <p class="text-secondary small">Nur ein Titel ist Pflicht. Alles andere kannst du später ergänzen.</p>
-
-        {{if .Error}}
-        <div class="alert alert-danger py-2" role="alert">{{.Error}}</div>
-        {{end}}
-
-        <form method="post" action="/" class="vstack gap-3">
-          <div>
-            <label for="title" class="form-label">Titel <span class="text-danger">*</span></label>
-            <input id="title" name="title" class="form-control form-control-lg" autocomplete="off" required placeholder="z. B. Neue Kopfhörer" value="{{.FormValues.Title}}" />
-          </div>
-
-          <div>
-            <label for="wait_preset" class="form-label">Wartezeit</label>
-            <select id="wait_preset" name="wait_preset" class="form-select">
-              <option value="24h" {{if or (eq .FormValues.WaitPreset "") (eq .FormValues.WaitPreset "24h")}}selected{{end}}>24h</option>
-              <option value="7d" {{if eq .FormValues.WaitPreset "7d"}}selected{{end}}>7 Tage</option>
-              <option value="30d" {{if eq .FormValues.WaitPreset "30d"}}selected{{end}}>30 Tage</option>
-              <option value="custom" {{if eq .FormValues.WaitPreset "custom"}}selected{{end}}>Custom</option>
-            </select>
-          </div>
-
-          <div id="custom-hours-group" {{if ne .FormValues.WaitPreset "custom"}}hidden{{end}}>
-            <label for="wait_custom_hours" class="form-label">Custom (Stunden)</label>
-            <input id="wait_custom_hours" name="wait_custom_hours" type="number" min="0.0001" step="any" class="form-control" placeholder="z. B. 12" value="{{.FormValues.WaitCustomHours}}" {{if ne .FormValues.WaitPreset "custom"}}disabled{{end}} />
-          </div>
-
-          <details>
-            <summary class="text-primary">Optionale Felder</summary>
-            <div class="pt-3 vstack gap-3">
-              <div>
-                <label for="price" class="form-label">Preis</label>
-                <input id="price" name="price" class="form-control" placeholder="z. B. 129,99" value="{{.FormValues.Price}}" />
-              </div>
-              <div>
-                <label for="link" class="form-label">Link</label>
-                <input id="link" name="link" class="form-control" placeholder="https://..." value="{{.FormValues.Link}}" />
-              </div>
-              <div>
-                <label for="tags" class="form-label">Tags</label>
-                <input id="tags" name="tags" class="form-control" placeholder="Tech, Audio" value="{{.FormValues.Tags}}" />
-              </div>
-              <div>
-                <label for="note" class="form-label">Notiz</label>
-                <textarea id="note" name="note" class="form-control" rows="2" placeholder="Warum willst du das kaufen?">{{.FormValues.Note}}</textarea>
-              </div>
-            </div>
-          </details>
-
-          <button class="btn btn-primary btn-lg" type="submit">Zur Warteliste hinzufügen</button>
-        </form>
+      <div class="card-body d-flex justify-content-between align-items-center gap-3 wrap-sm">
+        <div>
+          <h2 class="h5 card-title mb-1">Waitlist dashboard</h2>
+          <p class="text-secondary small mb-0">Your primary place for decisions.</p>
+        </div>
+        <div class="d-flex gap-2 wrap-sm">
+          <a class="btn btn-primary" href="/items/new">Add item</a>
+          <a class="btn btn-outline-primary" href="/settings/profile">Settings</a>
+        </div>
       </div>
     </section>
 
     <section class="card shadow-sm mb-4">
       <div class="card-body">
-        <h2 class="h5 card-title">Profil</h2>
-        <p class="text-secondary small mb-3">Hinterlege deinen Netto-Stundenlohn für den Reality-Check.</p>
-
-        {{if .ProfileError}}
-        <div class="alert alert-danger py-2" role="alert">{{.ProfileError}}</div>
-        {{end}}
-        {{if .ProfileFeedback}}
-        <div class="alert alert-success py-2" role="status">{{.ProfileFeedback}}</div>
-        {{end}}
-
-        {{if .ProfileEditing}}
-        <form id="profile-edit-form" method="post" action="/profile" class="vstack gap-3">
-          <div>
-            <label for="hourly_wage" class="form-label">Netto-Stundenlohn</label>
-            <input id="hourly_wage" name="hourly_wage" type="number" min="0.01" step="0.01" inputmode="decimal" class="form-control" placeholder="z. B. 25" value="{{.ProfileHourly}}" required />
-          </div>
-          <button id="profile-save-btn" class="btn btn-outline-primary" type="submit">Profil speichern</button>
-        </form>
+        <h2 class="h5 card-title">Profile status</h2>
+        {{if .ProfileConfigured}}
+        <p class="text-secondary mb-0">Hourly wage configured: <strong id="hourly-wage-value">{{.ProfileHourly}}</strong></p>
         {{else}}
-        <div id="profile-read-view" class="vstack gap-3">
-          <p class="mb-0"><span class="text-secondary">Netto-Stundenlohn:</span> <strong id="hourly-wage-value">{{.ProfileHourly}}</strong></p>
-          <div>
-            <form method="get" action="/" class="d-inline">
-              <input type="hidden" name="edit_profile" value="1" />
-              <button id="profile-edit-btn" class="btn btn-outline-primary" type="submit">Edit</button>
-            </form>
-          </div>
-        </div>
+        <p class="text-secondary mb-0">No hourly wage set yet. Add it once in settings for reality checks.</p>
         {{end}}
       </div>
     </section>
@@ -110,35 +43,35 @@
     <section class="card shadow-sm">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
-          <h2 class="h5 mb-0">Warteliste</h2>
-          <span class="badge text-bg-secondary">{{len .Items}} Items</span>
+          <h2 class="h5 mb-0">Waitlist</h2>
+          <span class="badge text-bg-secondary">{{len .Items}} items</span>
         </div>
 
         {{if not .Items}}
-        <p class="text-secondary mb-0">Noch keine Einträge. Leg dein erstes Item an.</p>
+        <p class="text-secondary mb-0">No entries yet. Add your first item when needed.</p>
         {{else}}
         <ul class="list-group list-group-flush">
           {{range .Items}}
           <li class="list-group-item px-0">
-            <div class="d-flex justify-content-between align-items-start gap-3">
+            <div class="d-flex justify-content-between align-items-start gap-3 wrap-sm">
               <div>
                 <p class="fw-semibold mb-1">{{.Title}}</p>
                 {{if .Note}}<p class="small text-secondary mb-1">{{.Note}}</p>{{end}}
                 {{if .Tags}}<p class="small text-secondary mb-1">Tags: {{.Tags}}</p>{{end}}
-                {{if .Link}}<a class="small" href="{{.Link}}" target="_blank" rel="noreferrer">Link öffnen</a>{{end}}
+                {{if .Link}}<a class="small" href="{{.Link}}" target="_blank" rel="noreferrer">Open link</a>{{end}}
               </div>
               <div class="text-end">
                 <span class="badge {{statusBadgeClass .Status}}">{{.Status}}</span>
                 {{if .Price}}<p class="small text-secondary mb-0 mt-1">{{.Price}}</p>{{end}}
                 <p class="small text-secondary mb-0 mt-1">
-                  Kauf erlaubt ab:
+                  Buy after:
                   <time class="purchase-allowed-at" datetime="{{.PurchaseAllowedAt.UTC.Format "2006-01-02T15:04:05Z07:00"}}">{{.PurchaseAllowedAt.Format "02.01.2006 15:04"}}</time>
                 </p>
-                {{if eq .Status "Kauf erlaubt"}}
+                {{if eq .Status "Ready to buy"}}
                 <form method="post" action="/items/status" class="d-flex flex-column gap-1 mt-2">
                   <input type="hidden" name="item_id" value="{{.ID}}" />
-                  <button class="btn btn-sm btn-success" type="submit" name="status" value="Gekauft">Als gekauft markieren</button>
-                  <button class="btn btn-sm btn-outline-secondary" type="submit" name="status" value="Nicht gekauft">Als nicht gekauft markieren</button>
+                  <button class="btn btn-sm btn-success" type="submit" name="status" value="Bought">Mark as bought</button>
+                  <button class="btn btn-sm btn-outline-secondary" type="submit" name="status" value="Skipped">Mark as skipped</button>
                 </form>
                 {{end}}
               </div>
@@ -153,25 +86,6 @@
 
   <script>
     (function () {
-      var waitPreset = document.getElementById("wait_preset");
-      var customHoursGroup = document.getElementById("custom-hours-group");
-      var customHoursInput = document.getElementById("wait_custom_hours");
-
-      function syncCustomHoursVisibility() {
-        if (!waitPreset || !customHoursGroup || !customHoursInput) {
-          return;
-        }
-
-        var isCustom = waitPreset.value === "custom";
-        customHoursGroup.hidden = !isCustom;
-        customHoursInput.disabled = !isCustom;
-      }
-
-      if (waitPreset) {
-        waitPreset.addEventListener("change", syncCustomHoursVisibility);
-      }
-      syncCustomHoursVisibility();
-
       var formatter = new Intl.DateTimeFormat(navigator.language, {
         day: "2-digit",
         month: "2-digit",

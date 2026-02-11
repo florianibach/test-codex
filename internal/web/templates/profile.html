@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{.Title}}</title>
+  <link href="/assets/app.css" rel="stylesheet">
+</head>
+<body class="bg-body-tertiary">
+  <main class="container py-3 py-md-4" style="max-width: 720px;">
+    <header class="d-flex justify-content-between align-items-center mb-3 page-header">
+      <div>
+        <h1 class="h3 mb-1">Profile settings</h1>
+        <p class="text-secondary mb-0">Usually configured once, available anytime.</p>
+      </div>
+      <a class="btn btn-outline-secondary btn-sm" href="/">Back to waitlist</a>
+    </header>
+
+    <section class="card shadow-sm">
+      <div class="card-body">
+        <h2 class="h5 card-title">Hourly wage</h2>
+        <p class="text-secondary small mb-3">Used for reality-check calculations.</p>
+
+        {{if .ProfileError}}
+        <div class="alert alert-danger py-2" role="alert">{{.ProfileError}}</div>
+        {{end}}
+        {{if .ProfileFeedback}}
+        <div class="alert alert-success py-2" role="status">{{.ProfileFeedback}}</div>
+        {{end}}
+
+        <form id="profile-edit-form" method="post" action="/settings/profile" class="vstack gap-3">
+          <div>
+            <label for="hourly_wage" class="form-label">Net hourly wage</label>
+            <input id="hourly_wage" name="hourly_wage" type="number" min="0.01" step="0.01" inputmode="decimal" class="form-control" placeholder="e.g. 25" value="{{.ProfileHourly}}" required />
+          </div>
+          <button id="profile-save-btn" class="btn btn-outline-primary" type="submit">Save profile</button>
+        </form>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

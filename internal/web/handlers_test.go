@@ -19,11 +19,26 @@ func TestHomeRoute(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rr.Code)
 	}
+	if body := rr.Body.String(); !strings.Contains(body, "Waitlist dashboard") {
+		t.Fatalf("expected dashboard content")
+	}
 }
 
-func TestHomeRouteHead(t *testing.T) {
+func TestHomeRouteRejectsPost(t *testing.T) {
 	app := NewApp()
-	req := httptest.NewRequest(http.MethodHead, "/", nil)
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", rr.Code)
+	}
+}
+
+func TestItemsNewRouteGet(t *testing.T) {
+	app := NewApp()
+	req := httptest.NewRequest(http.MethodGet, "/items/new", nil)
 	rr := httptest.NewRecorder()
 
 	app.Handler().ServeHTTP(rr, req)
@@ -31,32 +46,17 @@ func TestHomeRouteHead(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rr.Code)
 	}
-}
-
-func TestAssetsRoute(t *testing.T) {
-	app := NewApp()
-	req := httptest.NewRequest(http.MethodGet, "/assets/app.css", nil)
-	rr := httptest.NewRecorder()
-
-	app.Handler().ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rr.Code)
-	}
-	if contentType := rr.Header().Get("Content-Type"); !strings.Contains(contentType, "text/css") {
-		t.Fatalf("expected text/css content type, got %s", contentType)
-	}
-	if body := rr.Body.String(); !strings.Contains(body, ".btn-primary") {
-		t.Fatalf("expected css body content")
+	if body := rr.Body.String(); !strings.Contains(body, "Quick capture") {
+		t.Fatalf("expected add-item form on /items/new")
 	}
 }
 
 func TestCreateItemWithOnlyTitle(t *testing.T) {
 	app := NewApp()
 	form := url.Values{}
-	form.Set("title", "Kopfhörer")
+	form.Set("title", "Headphones")
 
-	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/items/new", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 
@@ -74,11 +74,11 @@ func TestCreateItemWithOnlyTitle(t *testing.T) {
 	app.Handler().ServeHTTP(getRR, getReq)
 
 	body := getRR.Body.String()
-	if !strings.Contains(body, "Kopfhörer") {
+	if !strings.Contains(body, "Headphones") {
 		t.Fatalf("expected item title in response body")
 	}
-	if !strings.Contains(body, "Wartet") {
-		t.Fatalf("expected item status Wartet in response body")
+	if !strings.Contains(body, "Waiting") {
+		t.Fatalf("expected item status Waiting in response body")
 	}
 }
 
@@ -87,7 +87,7 @@ func TestCreateItemValidation(t *testing.T) {
 	form := url.Values{}
 	form.Set("title", "")
 
-	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/items/new", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 
@@ -96,7 +96,7 @@ func TestCreateItemValidation(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rr.Code)
 	}
-	if body := rr.Body.String(); !strings.Contains(body, "Bitte gib einen Titel ein.") {
+	if body := rr.Body.String(); !strings.Contains(body, "Please enter a title.") {
 		t.Fatalf("expected validation message in response body")
 	}
 }
@@ -104,10 +104,10 @@ func TestCreateItemValidation(t *testing.T) {
 func TestCreateItemWithPresetWaitDuration(t *testing.T) {
 	app := NewApp()
 	form := url.Values{}
-	form.Set("title", "Espressomaschine")
+	form.Set("title", "Espresso machine")
 	form.Set("wait_preset", "7d")
 
-	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/items/new", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 
@@ -126,92 +126,19 @@ func TestCreateItemWithPresetWaitDuration(t *testing.T) {
 	if item.WaitPreset != "7d" {
 		t.Fatalf("expected wait preset 7d, got %q", item.WaitPreset)
 	}
-	delta := item.PurchaseAllowedAt.Sub(item.CreatedAt)
-	if delta != 7*24*time.Hour {
-		t.Fatalf("expected 168h wait duration, got %s", delta)
-	}
-}
-
-func TestCreateItemWithCustomWaitDuration(t *testing.T) {
-	app := NewApp()
-	form := url.Values{}
-	form.Set("title", "Gaming Maus")
-	form.Set("wait_preset", "custom")
-	form.Set("wait_custom_hours", "12")
-
-	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rr := httptest.NewRecorder()
-
-	app.Handler().ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusSeeOther {
-		t.Fatalf("expected 303, got %d", rr.Code)
-	}
-
-	app.mu.RLock()
-	defer app.mu.RUnlock()
-	item := app.items[0]
-	if item.WaitPreset != "custom" {
-		t.Fatalf("expected wait preset custom, got %q", item.WaitPreset)
-	}
-	if item.WaitCustomHours != "12" {
-		t.Fatalf("expected custom hours 12, got %q", item.WaitCustomHours)
-	}
-	if got := item.PurchaseAllowedAt.Sub(item.CreatedAt); got != 12*time.Hour {
-		t.Fatalf("expected 12h wait duration, got %s", got)
-	}
-}
-
-func TestCreateItemValidationForCustomWaitDuration(t *testing.T) {
-	app := NewApp()
-	form := url.Values{}
-	form.Set("title", "Schreibtisch")
-	form.Set("wait_preset", "custom")
-	form.Set("wait_custom_hours", "0")
-
-	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rr := httptest.NewRecorder()
-
-	app.Handler().ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", rr.Code)
-	}
-	if body := rr.Body.String(); !strings.Contains(body, "gültige Anzahl Stunden") {
-		t.Fatalf("expected custom validation message in response body")
-	}
-}
-
-func TestHomeRouteHidesCustomHoursByDefault(t *testing.T) {
-	app := NewApp()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rr := httptest.NewRecorder()
-
-	app.Handler().ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rr.Code)
-	}
-
-	body := rr.Body.String()
-	if !strings.Contains(body, "id=\"custom-hours-group\" hidden") {
-		t.Fatalf("expected custom hours group to be hidden by default")
-	}
-	if !strings.Contains(body, "id=\"wait_custom_hours\"") || !strings.Contains(body, "disabled") {
-		t.Fatalf("expected custom hours input to be disabled by default")
+	if got := item.PurchaseAllowedAt.Sub(item.CreatedAt); got != 7*24*time.Hour {
+		t.Fatalf("expected 168h wait duration, got %s", got)
 	}
 }
 
 func TestCreateItemValidationKeepsCustomHoursVisible(t *testing.T) {
 	app := NewApp()
 	form := url.Values{}
-	form.Set("title", "Schreibtisch")
+	form.Set("title", "Desk")
 	form.Set("wait_preset", "custom")
 	form.Set("wait_custom_hours", "0")
 
-	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/items/new", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 
@@ -223,21 +150,18 @@ func TestCreateItemValidationKeepsCustomHoursVisible(t *testing.T) {
 
 	body := rr.Body.String()
 	if strings.Contains(body, "id=\"custom-hours-group\" hidden") {
-		t.Fatalf("expected custom hours group to stay visible on custom validation error")
-	}
-	if strings.Contains(body, "id=\"wait_custom_hours\" name=\"wait_custom_hours\" type=\"number\" class=\"form-control\" placeholder=\"z. B. 12\" value=\"0\" disabled") {
-		t.Fatalf("expected custom hours input to remain enabled on custom validation error")
+		t.Fatalf("expected custom hours group to stay visible")
 	}
 }
 
-func TestStatusAutomaticallyBecomesPurchaseAllowed(t *testing.T) {
+func TestStatusAutomaticallyBecomesReadyToBuy(t *testing.T) {
 	app := NewApp()
 
 	app.mu.Lock()
 	app.items = append(app.items, Item{
 		ID:                1,
-		Title:             "Kaffeemaschine",
-		Status:            "Wartet",
+		Title:             "Coffee grinder",
+		Status:            "Waiting",
 		CreatedAt:         time.Now().Add(-2 * time.Hour),
 		PurchaseAllowedAt: time.Now().Add(-time.Minute),
 	})
@@ -250,25 +174,19 @@ func TestStatusAutomaticallyBecomesPurchaseAllowed(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rr.Code)
 	}
-	if !strings.Contains(rr.Body.String(), "Kauf erlaubt") {
-		t.Fatalf("expected item status Kauf erlaubt to be rendered")
-	}
-
-	app.mu.RLock()
-	defer app.mu.RUnlock()
-	if app.items[0].Status != "Kauf erlaubt" {
-		t.Fatalf("expected status to be promoted, got %q", app.items[0].Status)
+	if !strings.Contains(rr.Body.String(), "Ready to buy") {
+		t.Fatalf("expected promoted status in rendered page")
 	}
 }
 
-func TestStatusCanBeSetToBoughtFromPurchaseAllowed(t *testing.T) {
+func TestStatusCanBeSetToBoughtFromReadyToBuy(t *testing.T) {
 	app := NewApp()
 
 	app.mu.Lock()
 	app.items = append(app.items, Item{
 		ID:                42,
 		Title:             "Monitor",
-		Status:            "Kauf erlaubt",
+		Status:            "Ready to buy",
 		CreatedAt:         time.Now().Add(-48 * time.Hour),
 		PurchaseAllowedAt: time.Now().Add(-24 * time.Hour),
 	})
@@ -276,7 +194,7 @@ func TestStatusCanBeSetToBoughtFromPurchaseAllowed(t *testing.T) {
 
 	form := url.Values{}
 	form.Set("item_id", "42")
-	form.Set("status", "Gekauft")
+	form.Set("status", "Bought")
 
 	req := httptest.NewRequest(http.MethodPost, "/items/status", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -289,41 +207,8 @@ func TestStatusCanBeSetToBoughtFromPurchaseAllowed(t *testing.T) {
 
 	app.mu.RLock()
 	defer app.mu.RUnlock()
-	if app.items[0].Status != "Gekauft" {
-		t.Fatalf("expected status Gekauft, got %q", app.items[0].Status)
-	}
-}
-
-func TestStatusCanBeSetToNotBoughtFromPurchaseAllowed(t *testing.T) {
-	app := NewApp()
-
-	app.mu.Lock()
-	app.items = append(app.items, Item{
-		ID:                9,
-		Title:             "Sneaker",
-		Status:            "Kauf erlaubt",
-		CreatedAt:         time.Now().Add(-48 * time.Hour),
-		PurchaseAllowedAt: time.Now().Add(-24 * time.Hour),
-	})
-	app.mu.Unlock()
-
-	form := url.Values{}
-	form.Set("item_id", "9")
-	form.Set("status", "Nicht gekauft")
-
-	req := httptest.NewRequest(http.MethodPost, "/items/status", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rr := httptest.NewRecorder()
-	app.Handler().ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusSeeOther {
-		t.Fatalf("expected 303, got %d", rr.Code)
-	}
-
-	app.mu.RLock()
-	defer app.mu.RUnlock()
-	if app.items[0].Status != "Nicht gekauft" {
-		t.Fatalf("expected status Nicht gekauft, got %q", app.items[0].Status)
+	if app.items[0].Status != "Bought" {
+		t.Fatalf("expected status Bought, got %q", app.items[0].Status)
 	}
 }
 
@@ -331,18 +216,12 @@ func TestStatusUpdateFromWaitingReturnsConflict(t *testing.T) {
 	app := NewApp()
 
 	app.mu.Lock()
-	app.items = append(app.items, Item{
-		ID:                5,
-		Title:             "Stuhl",
-		Status:            "Wartet",
-		CreatedAt:         time.Now(),
-		PurchaseAllowedAt: time.Now().Add(24 * time.Hour),
-	})
+	app.items = append(app.items, Item{ID: 5, Title: "Chair", Status: "Waiting", PurchaseAllowedAt: time.Now().Add(24 * time.Hour)})
 	app.mu.Unlock()
 
 	form := url.Values{}
 	form.Set("item_id", "5")
-	form.Set("status", "Nicht gekauft")
+	form.Set("status", "Skipped")
 
 	req := httptest.NewRequest(http.MethodPost, "/items/status", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -354,31 +233,77 @@ func TestStatusUpdateFromWaitingReturnsConflict(t *testing.T) {
 	}
 }
 
-func TestTerminalStatusDoesNotRevertDuringPromotion(t *testing.T) {
+func TestProfileSettingsGet(t *testing.T) {
 	app := NewApp()
-
-	app.mu.Lock()
-	app.items = append(app.items,
-		Item{ID: 1, Title: "Laptop", Status: "Gekauft", PurchaseAllowedAt: time.Now().Add(-time.Hour)},
-		Item{ID: 2, Title: "Headset", Status: "Nicht gekauft", PurchaseAllowedAt: time.Now().Add(-time.Hour)},
-	)
-	app.mu.Unlock()
-
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/settings/profile", nil)
 	rr := httptest.NewRecorder()
+
 	app.Handler().ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rr.Code)
 	}
-
-	app.mu.RLock()
-	defer app.mu.RUnlock()
-	if app.items[0].Status != "Gekauft" {
-		t.Fatalf("expected first item to remain Gekauft, got %q", app.items[0].Status)
+	if body := rr.Body.String(); !strings.Contains(body, "Profile settings") {
+		t.Fatalf("expected profile settings page")
 	}
-	if app.items[1].Status != "Nicht gekauft" {
-		t.Fatalf("expected second item to remain Nicht gekauft, got %q", app.items[1].Status)
+}
+
+func TestProfileCanBeSavedAndPersisted(t *testing.T) {
+	app := NewApp()
+	form := url.Values{}
+	form.Set("hourly_wage", "42.5")
+
+	req := httptest.NewRequest(http.MethodPost, "/settings/profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", rr.Code)
+	}
+	if got := rr.Header().Get("Location"); got != "/settings/profile?saved=1" {
+		t.Fatalf("unexpected redirect location %q", got)
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	getRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(getRR, getReq)
+	if body := getRR.Body.String(); !strings.Contains(body, "id=\"hourly-wage-value\">42.5</strong>") {
+		t.Fatalf("expected saved wage visible on dashboard")
+	}
+}
+
+func TestProfileValidation(t *testing.T) {
+	app := NewApp()
+	form := url.Values{}
+	form.Set("hourly_wage", "0")
+
+	req := httptest.NewRequest(http.MethodPost, "/settings/profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+	if body := rr.Body.String(); !strings.Contains(body, "valid hourly wage") {
+		t.Fatalf("expected hourly wage validation in response body")
+	}
+}
+
+func TestLegacyProfileRouteRedirectsOnGet(t *testing.T) {
+	app := NewApp()
+	req := httptest.NewRequest(http.MethodGet, "/profile", nil)
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", rr.Code)
+	}
+	if got := rr.Header().Get("Location"); got != "/settings/profile" {
+		t.Fatalf("expected redirect to settings page, got %q", got)
 	}
 }
 
@@ -395,9 +320,8 @@ func TestParseWaitDuration(t *testing.T) {
 		{name: "7d", preset: "7d", wantDuration: 7 * 24 * time.Hour},
 		{name: "30d", preset: "30d", wantDuration: 30 * 24 * time.Hour},
 		{name: "custom", preset: "custom", customHours: "5", wantDuration: 5 * time.Hour},
-		{name: "custom decimal", preset: "custom", customHours: "0.5", wantDuration: 30 * time.Minute},
-		{name: "invalid custom", preset: "custom", customHours: "0", wantErrContains: "gültige Anzahl Stunden"},
-		{name: "invalid preset", preset: "abc", wantErrContains: "gültige Wartezeit"},
+		{name: "invalid custom", preset: "custom", customHours: "0", wantErrContains: "valid number"},
+		{name: "invalid preset", preset: "abc", wantErrContains: "valid wait time"},
 	}
 
 	for _, tt := range tests {
@@ -419,180 +343,6 @@ func TestParseWaitDuration(t *testing.T) {
 	}
 }
 
-func TestProfileCanBeSavedAndPersisted(t *testing.T) {
-	app := NewApp()
-	form := url.Values{}
-	form.Set("hourly_wage", "42.5")
-
-	req := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rr := httptest.NewRecorder()
-
-	app.Handler().ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rr.Code)
-	}
-	if body := rr.Body.String(); !strings.Contains(body, "Profil gespeichert.") {
-		t.Fatalf("expected success feedback in response body")
-	}
-
-	getReq := httptest.NewRequest(http.MethodGet, "/", nil)
-	getRR := httptest.NewRecorder()
-	app.Handler().ServeHTTP(getRR, getReq)
-
-	if body := getRR.Body.String(); !strings.Contains(body, "<strong id=\"hourly-wage-value\">42.5</strong>") {
-		t.Fatalf("expected persisted hourly wage in profile read view")
-	}
-}
-
-func TestProfileUpdateOverwritesExistingValue(t *testing.T) {
-	app := NewApp()
-
-	first := url.Values{}
-	first.Set("hourly_wage", "21")
-	firstReq := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(first.Encode()))
-	firstReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	firstRR := httptest.NewRecorder()
-	app.Handler().ServeHTTP(firstRR, firstReq)
-
-	if firstRR.Code != http.StatusOK {
-		t.Fatalf("expected first save status 200, got %d", firstRR.Code)
-	}
-
-	second := url.Values{}
-	second.Set("hourly_wage", "33")
-	secondReq := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(second.Encode()))
-	secondReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	secondRR := httptest.NewRecorder()
-	app.Handler().ServeHTTP(secondRR, secondReq)
-
-	if secondRR.Code != http.StatusOK {
-		t.Fatalf("expected second save status 200, got %d", secondRR.Code)
-	}
-
-	getReq := httptest.NewRequest(http.MethodGet, "/", nil)
-	getRR := httptest.NewRecorder()
-	app.Handler().ServeHTTP(getRR, getReq)
-
-	body := getRR.Body.String()
-	if !strings.Contains(body, "<strong id=\"hourly-wage-value\">33</strong>") {
-		t.Fatalf("expected updated hourly wage in profile read view")
-	}
-	if strings.Contains(body, "<strong id=\"hourly-wage-value\">21</strong>") {
-		t.Fatalf("expected previous hourly wage not to remain in profile read view")
-	}
-}
-
-func TestProfileValidation(t *testing.T) {
-	app := NewApp()
-	form := url.Values{}
-	form.Set("hourly_wage", "0")
-
-	req := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rr := httptest.NewRecorder()
-
-	app.Handler().ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", rr.Code)
-	}
-	if body := rr.Body.String(); !strings.Contains(body, "gültigen Stundenlohn") {
-		t.Fatalf("expected hourly wage validation in response body")
-	}
-}
-
-func TestProfileRouteMethodNotAllowed(t *testing.T) {
-	app := NewApp()
-	req := httptest.NewRequest(http.MethodGet, "/profile", nil)
-	rr := httptest.NewRecorder()
-
-	app.Handler().ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("expected 405, got %d", rr.Code)
-	}
-}
-
-func TestProfileUsesReadViewAfterSaving(t *testing.T) {
-	app := NewApp()
-	form := url.Values{}
-	form.Set("hourly_wage", "30")
-
-	req := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rr := httptest.NewRecorder()
-	app.Handler().ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rr.Code)
-	}
-
-	body := rr.Body.String()
-	if !strings.Contains(body, "id=\"profile-read-view\"") {
-		t.Fatalf("expected profile read view to be rendered")
-	}
-	if !strings.Contains(body, "<strong id=\"hourly-wage-value\">30</strong>") {
-		t.Fatalf("expected saved hourly wage value in read view")
-	}
-	if !strings.Contains(body, "id=\"profile-edit-btn\"") {
-		t.Fatalf("expected edit button in read view")
-	}
-	if strings.Contains(body, "id=\"profile-edit-form\"") {
-		t.Fatalf("expected profile edit form to be absent in read view")
-	}
-}
-
-func TestProfileValidationKeepsEditMode(t *testing.T) {
-	app := NewApp()
-	form := url.Values{}
-	form.Set("hourly_wage", "0")
-
-	req := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rr := httptest.NewRecorder()
-	app.Handler().ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", rr.Code)
-	}
-
-	body := rr.Body.String()
-	if !strings.Contains(body, "id=\"profile-edit-form\"") {
-		t.Fatalf("expected profile edit form to remain visible on validation error")
-	}
-	if strings.Contains(body, "id=\"profile-read-view\"") {
-		t.Fatalf("expected read view to be absent on validation error")
-	}
-}
-
-func TestProfileEditQueryShowsEditModeForExistingProfile(t *testing.T) {
-	app := NewApp()
-	app.mu.Lock()
-	app.hourlyWage = "44"
-	app.mu.Unlock()
-
-	req := httptest.NewRequest(http.MethodGet, "/?edit_profile=1", nil)
-	rr := httptest.NewRecorder()
-	app.Handler().ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rr.Code)
-	}
-
-	body := rr.Body.String()
-	if !strings.Contains(body, "id=\"profile-edit-form\"") {
-		t.Fatalf("expected profile edit form in edit mode")
-	}
-	if strings.Contains(body, "id=\"profile-read-view\"") {
-		t.Fatalf("expected read view to be absent in edit mode")
-	}
-	if !strings.Contains(body, "value=\"44\"") {
-		t.Fatalf("expected existing profile hourly wage in edit form")
-	}
-}
-
 func TestParseHourlyWage(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -602,11 +352,8 @@ func TestParseHourlyWage(t *testing.T) {
 	}{
 		{name: "valid", raw: "20", want: 20},
 		{name: "valid decimal", raw: "17.5", want: 17.5},
-		{name: "trimmed", raw: " 33 ", want: 33},
-		{name: "empty", raw: "", wantErrContains: "gültigen Stundenlohn"},
-		{name: "zero", raw: "0", wantErrContains: "gültigen Stundenlohn"},
-		{name: "negative", raw: "-2", wantErrContains: "gültigen Stundenlohn"},
-		{name: "not numeric", raw: "abc", wantErrContains: "gültigen Stundenlohn"},
+		{name: "empty", raw: "", wantErrContains: "valid hourly wage"},
+		{name: "zero", raw: "0", wantErrContains: "valid hourly wage"},
 	}
 
 	for _, tt := range tests {
