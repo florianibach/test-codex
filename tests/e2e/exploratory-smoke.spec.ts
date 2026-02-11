@@ -206,6 +206,9 @@ test('MVP-004: profile hourly wage shows as value after save and can be edited',
   await expect(page.getByLabel('Netto-Stundenlohn')).toHaveValue('31.5');
   await expect(page.getByRole('button', { name: 'Profil speichern' })).toBeVisible();
 
+  // Edit navigates to /?edit_profile=1. Return to canonical home URL
+  // before verifying read mode after a refresh.
+  await page.goto('/');
   await page.reload();
   await expect(page.locator('#hourly-wage-value')).toHaveText('31.5');
   await expect(page.locator('#profile-edit-form')).toHaveCount(0);
