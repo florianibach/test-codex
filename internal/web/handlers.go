@@ -92,14 +92,15 @@ type pageData struct {
 }
 
 type App struct {
-	templates  *template.Template
-	mux        *http.ServeMux
-	mu         sync.RWMutex
-	items      []Item
-	hourlyWage string
-	ntfyURL    string
-	ntfyTopic  string
-	nextID     int
+	templates    *template.Template
+	mux          *http.ServeMux
+	mu           sync.RWMutex
+	items        []Item
+	hourlyWage   string
+	ntfyURL      string
+	ntfyTopic    string
+	dashboardURL string
+	nextID       int
 }
 
 func NewApp() *App {
@@ -130,6 +131,29 @@ func (a *App) routes() {
 
 func (a *App) Handler() http.Handler {
 	return loggingMiddleware(a.mux)
+}
+
+func (a *App) StartBackgroundPromotion(interval time.Duration) {
+	if interval <= 0 {
+		interval = 30 * time.Second
+	}
+
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			a.mu.Lock()
+			a.promoteReadyItemsLocked(time.Now())
+			a.mu.Unlock()
+		}
+	}()
+}
+
+func (a *App) SetDashboardURL(raw string) {
+	a.mu.Lock()
+	a.dashboardURL = strings.TrimRight(strings.TrimSpace(raw), "/")
+	a.mu.Unlock()
 }
 
 func (a *App) home(w http.ResponseWriter, r *http.Request) {
@@ -279,6 +303,19 @@ func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 			NtfyEndpoint:  ntfyURL,
 			NtfyTopic:     ntfyTopic,
 			ProfileError:  err.Error(),
+		})
+		return
+	}
+
+	if (ntfyURL == "" && ntfyTopic != "") || (ntfyURL != "" && ntfyTopic == "") {
+		w.WriteHeader(http.StatusBadRequest)
+		a.renderProfile(w, profileViewData{
+			Title:         "Profile settings",
+			CurrentPath:   "/settings/profile",
+			ProfileHourly: hourlyWage,
+			NtfyEndpoint:  ntfyURL,
+			NtfyTopic:     ntfyTopic,
+			ProfileError:  "Please provide both ntfy endpoint and topic, or leave both empty.",
 		})
 		return
 	}
@@ -462,7 +499,7 @@ func (a *App) sendNtfyNotificationLocked(item Item) {
 		return
 	}
 
-	message := fmt.Sprintf("%s is now ready to buy.", item.Title)
+	message := fmt.Sprintf("%s is now ready to buy.\nDashboard: %s", item.Title, a.dashboardLink())
 	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/%s", a.ntfyURL, a.ntfyTopic), strings.NewReader(message))
 	if err != nil {
 		log.Printf("ntfy request creation failed for item %d: %v", item.ID, err)
@@ -482,6 +519,13 @@ func (a *App) sendNtfyNotificationLocked(item Item) {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 		log.Printf("ntfy request returned %d for item %d: %s", resp.StatusCode, item.ID, strings.TrimSpace(string(body)))
 	}
+}
+
+func (a *App) dashboardLink() string {
+	if a.dashboardURL == "" {
+		return "http://localhost:8080/"
+	}
+	return a.dashboardURL + "/"
 }
 
 func workHoursAvailable(item Item, hourlyWage float64, hasHourlyWage bool) bool {

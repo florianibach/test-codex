@@ -1,6 +1,7 @@
 package web
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -392,6 +393,7 @@ func TestLegacyProfileRouteRedirectsOnGet(t *testing.T) {
 func TestReadyToBuySendsSingleNtfyNotification(t *testing.T) {
 	app := NewApp()
 	requestCount := 0
+	requestBody := ""
 	ntfyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
 		if r.Method != http.MethodPost {
@@ -400,6 +402,8 @@ func TestReadyToBuySendsSingleNtfyNotification(t *testing.T) {
 		if got := r.URL.Path; got != "/impulse-pause" {
 			t.Fatalf("expected topic path /impulse-pause, got %s", got)
 		}
+		body, _ := io.ReadAll(r.Body)
+		requestBody = string(body)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer ntfyServer.Close()
@@ -407,6 +411,7 @@ func TestReadyToBuySendsSingleNtfyNotification(t *testing.T) {
 	app.mu.Lock()
 	app.ntfyURL = ntfyServer.URL
 	app.ntfyTopic = "impulse-pause"
+	app.dashboardURL = "https://app.example.com"
 	app.items = append(app.items, Item{ID: 9, Title: "Laptop stand", Status: "Waiting", PurchaseAllowedAt: time.Now().Add(-time.Minute)})
 	app.mu.Unlock()
 
@@ -426,6 +431,9 @@ func TestReadyToBuySendsSingleNtfyNotification(t *testing.T) {
 
 	if requestCount != 1 {
 		t.Fatalf("expected exactly one ntfy request, got %d", requestCount)
+	}
+	if !strings.Contains(requestBody, "Dashboard: https://app.example.com/") {
+		t.Fatalf("expected dashboard URL in ntfy body, got %q", requestBody)
 	}
 }
 
@@ -467,6 +475,7 @@ func TestReadyToBuyContinuesWhenNtfyFails(t *testing.T) {
 	app.mu.Lock()
 	app.ntfyURL = ntfyServer.URL
 	app.ntfyTopic = "impulse-pause"
+	app.dashboardURL = "https://app.example.com"
 	app.items = append(app.items, Item{ID: 12, Title: "Phone holder", Status: "Waiting", PurchaseAllowedAt: time.Now().Add(-time.Minute)})
 	app.mu.Unlock()
 
@@ -515,6 +524,43 @@ func TestProfilePersistsNtfySettings(t *testing.T) {
 		t.Fatalf("expected saved ntfy topic in profile form")
 	}
 }
+
+func TestProfileRejectsPartialNtfyConfiguration(t *testing.T) {
+	app := NewApp()
+	form := url.Values{}
+	form.Set("hourly_wage", "30")
+	form.Set("ntfy_endpoint", "https://ntfy.sh")
+
+	req := httptest.NewRequest(http.MethodPost, "/settings/profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+	if body := rr.Body.String(); !strings.Contains(body, "both ntfy endpoint and topic") {
+		t.Fatalf("expected pair validation message, got %q", body)
+	}
+}
+
+func TestBackgroundPromotionPromotesWithoutHTTPRequest(t *testing.T) {
+	app := NewApp()
+
+	app.mu.Lock()
+	app.items = append(app.items, Item{ID: 21, Title: "Cable", Status: "Waiting", PurchaseAllowedAt: time.Now().Add(-time.Minute)})
+	app.mu.Unlock()
+
+	app.StartBackgroundPromotion(10 * time.Millisecond)
+	time.Sleep(60 * time.Millisecond)
+
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if app.items[0].Status != "Ready to buy" {
+		t.Fatalf("expected background promotion to update status, got %q", app.items[0].Status)
+	}
+}
+
 func TestParseWaitDuration(t *testing.T) {
 	tests := []struct {
 		name            string
