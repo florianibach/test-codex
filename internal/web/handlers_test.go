@@ -230,6 +230,158 @@ func TestCreateItemValidationKeepsCustomHoursVisible(t *testing.T) {
 	}
 }
 
+func TestStatusAutomaticallyBecomesPurchaseAllowed(t *testing.T) {
+	app := NewApp()
+
+	app.mu.Lock()
+	app.items = append(app.items, Item{
+		ID:                1,
+		Title:             "Kaffeemaschine",
+		Status:            "Wartet",
+		CreatedAt:         time.Now().Add(-2 * time.Hour),
+		PurchaseAllowedAt: time.Now().Add(-time.Minute),
+	})
+	app.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "Kauf erlaubt") {
+		t.Fatalf("expected item status Kauf erlaubt to be rendered")
+	}
+
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if app.items[0].Status != "Kauf erlaubt" {
+		t.Fatalf("expected status to be promoted, got %q", app.items[0].Status)
+	}
+}
+
+func TestStatusCanBeSetToBoughtFromPurchaseAllowed(t *testing.T) {
+	app := NewApp()
+
+	app.mu.Lock()
+	app.items = append(app.items, Item{
+		ID:                42,
+		Title:             "Monitor",
+		Status:            "Kauf erlaubt",
+		CreatedAt:         time.Now().Add(-48 * time.Hour),
+		PurchaseAllowedAt: time.Now().Add(-24 * time.Hour),
+	})
+	app.mu.Unlock()
+
+	form := url.Values{}
+	form.Set("item_id", "42")
+	form.Set("status", "Gekauft")
+
+	req := httptest.NewRequest(http.MethodPost, "/items/status", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", rr.Code)
+	}
+
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if app.items[0].Status != "Gekauft" {
+		t.Fatalf("expected status Gekauft, got %q", app.items[0].Status)
+	}
+}
+
+func TestStatusCanBeSetToNotBoughtFromPurchaseAllowed(t *testing.T) {
+	app := NewApp()
+
+	app.mu.Lock()
+	app.items = append(app.items, Item{
+		ID:                9,
+		Title:             "Sneaker",
+		Status:            "Kauf erlaubt",
+		CreatedAt:         time.Now().Add(-48 * time.Hour),
+		PurchaseAllowedAt: time.Now().Add(-24 * time.Hour),
+	})
+	app.mu.Unlock()
+
+	form := url.Values{}
+	form.Set("item_id", "9")
+	form.Set("status", "Nicht gekauft")
+
+	req := httptest.NewRequest(http.MethodPost, "/items/status", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", rr.Code)
+	}
+
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if app.items[0].Status != "Nicht gekauft" {
+		t.Fatalf("expected status Nicht gekauft, got %q", app.items[0].Status)
+	}
+}
+
+func TestStatusUpdateFromWaitingReturnsConflict(t *testing.T) {
+	app := NewApp()
+
+	app.mu.Lock()
+	app.items = append(app.items, Item{
+		ID:                5,
+		Title:             "Stuhl",
+		Status:            "Wartet",
+		CreatedAt:         time.Now(),
+		PurchaseAllowedAt: time.Now().Add(24 * time.Hour),
+	})
+	app.mu.Unlock()
+
+	form := url.Values{}
+	form.Set("item_id", "5")
+	form.Set("status", "Nicht gekauft")
+
+	req := httptest.NewRequest(http.MethodPost, "/items/status", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d", rr.Code)
+	}
+}
+
+func TestTerminalStatusDoesNotRevertDuringPromotion(t *testing.T) {
+	app := NewApp()
+
+	app.mu.Lock()
+	app.items = append(app.items,
+		Item{ID: 1, Title: "Laptop", Status: "Gekauft", PurchaseAllowedAt: time.Now().Add(-time.Hour)},
+		Item{ID: 2, Title: "Headset", Status: "Nicht gekauft", PurchaseAllowedAt: time.Now().Add(-time.Hour)},
+	)
+	app.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if app.items[0].Status != "Gekauft" {
+		t.Fatalf("expected first item to remain Gekauft, got %q", app.items[0].Status)
+	}
+	if app.items[1].Status != "Nicht gekauft" {
+		t.Fatalf("expected second item to remain Nicht gekauft, got %q", app.items[1].Status)
+	}
+}
+
 func TestParseWaitDuration(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -243,6 +395,7 @@ func TestParseWaitDuration(t *testing.T) {
 		{name: "7d", preset: "7d", wantDuration: 7 * 24 * time.Hour},
 		{name: "30d", preset: "30d", wantDuration: 30 * 24 * time.Hour},
 		{name: "custom", preset: "custom", customHours: "5", wantDuration: 5 * time.Hour},
+		{name: "custom decimal", preset: "custom", customHours: "0.5", wantDuration: 30 * time.Minute},
 		{name: "invalid custom", preset: "custom", customHours: "0", wantErrContains: "gültige Anzahl Stunden"},
 		{name: "invalid preset", preset: "abc", wantErrContains: "gültige Wartezeit"},
 	}

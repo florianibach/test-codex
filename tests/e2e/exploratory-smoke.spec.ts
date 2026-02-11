@@ -122,6 +122,13 @@ test('MVP-002: custom wait duration validates invalid values', async ({ page }) 
   await page.getByLabel('Wartezeit').selectOption('custom');
   await page.getByLabel('Custom (Stunden)').fill('0');
   await page.getByLabel('Titel *').fill(uniqueTitle('Schallplatte'));
+
+  // Browser number constraints (min/step) can block submit before backend validation.
+  // Disable native form validation here to verify server-side custom wait validation.
+  await page.locator('form[action="/"]').evaluate((form) => {
+    (form as HTMLFormElement).noValidate = true;
+  });
+
   await page.getByRole('button', { name: 'Zur Warteliste hinzufügen' }).click();
 
   await expect(page.getByRole('alert')).toContainText('gültige Anzahl Stunden');
@@ -175,4 +182,64 @@ test('MVP-002: purchase-allowed timestamp is rendered in browser locale from dat
   }, rawDatetime);
 
   await expect(timeElement).toHaveText(expectedText);
+});
+
+async function waitForItemStatus(page, title: string, status: string) {
+  const itemRow = page.locator('li.list-group-item').filter({ hasText: title }).first();
+
+  await expect
+    .poll(
+      async () => {
+        await page.reload();
+        if (!(await itemRow.isVisible())) {
+          return 'missing';
+        }
+
+        const badgeText = (await itemRow.locator('.badge').first().textContent()) ?? '';
+        return badgeText.trim();
+      },
+      {
+        timeout: 15_000,
+        intervals: [300, 500, 1_000],
+        message: `Expected status ${status} for item ${title}`,
+      },
+    )
+    .toBe(status);
+
+  return itemRow;
+}
+
+test('MVP-003: item auto-promotes to Kauf erlaubt after wait time elapsed', async ({ page }) => {
+  await page.goto('/');
+
+  const title = uniqueTitle('Auto-Promotion');
+  await page.getByLabel('Wartezeit').selectOption('custom');
+  await page.getByLabel('Custom (Stunden)').fill('0.0003');
+  await page.getByLabel('Titel *').fill(title);
+  await page.getByRole('button', { name: 'Zur Warteliste hinzufügen' }).click();
+
+  const itemRow = await waitForItemStatus(page, title, 'Kauf erlaubt');
+  await expect(itemRow.getByRole('button', { name: 'Als gekauft markieren' })).toBeVisible();
+  await expect(itemRow.getByRole('button', { name: 'Als nicht gekauft markieren' })).toBeVisible();
+});
+
+test('MVP-003: manual decision persists as Nicht gekauft across reload', async ({ page }) => {
+  await page.goto('/');
+
+  const title = uniqueTitle('Manual-Decision');
+  await page.getByLabel('Wartezeit').selectOption('custom');
+  await page.getByLabel('Custom (Stunden)').fill('0.0003');
+  await page.getByLabel('Titel *').fill(title);
+  await page.getByRole('button', { name: 'Zur Warteliste hinzufügen' }).click();
+
+  const itemRow = await waitForItemStatus(page, title, 'Kauf erlaubt');
+  await itemRow.getByRole('button', { name: 'Als nicht gekauft markieren' }).click();
+
+  const decidedRow = page.locator('li.list-group-item').filter({ hasText: title }).first();
+  await expect(decidedRow.getByText('Nicht gekauft')).toBeVisible();
+
+  await page.reload();
+  await expect(decidedRow.getByText('Nicht gekauft')).toBeVisible();
+  await expect(decidedRow.getByRole('button', { name: 'Als gekauft markieren' })).toHaveCount(0);
+  await expect(decidedRow.getByRole('button', { name: 'Als nicht gekauft markieren' })).toHaveCount(0);
 });
