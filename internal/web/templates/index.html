@@ -94,12 +94,19 @@
                 {{if .Link}}<a class="small" href="{{.Link}}" target="_blank" rel="noreferrer">Link öffnen</a>{{end}}
               </div>
               <div class="text-end">
-                <span class="badge text-bg-warning">{{.Status}}</span>
+                <span class="badge {{statusBadgeClass .Status}}">{{.Status}}</span>
                 {{if .Price}}<p class="small text-secondary mb-0 mt-1">{{.Price}}</p>{{end}}
                 <p class="small text-secondary mb-0 mt-1">
                   Kauf erlaubt ab:
                   <time class="purchase-allowed-at" datetime="{{.PurchaseAllowedAt.UTC.Format "2006-01-02T15:04:05Z07:00"}}">{{.PurchaseAllowedAt.Format "02.01.2006 15:04"}}</time>
                 </p>
+                {{if eq .Status "Kauf erlaubt"}}
+                <form method="post" action="/items/status" class="d-flex flex-column gap-1 mt-2">
+                  <input type="hidden" name="item_id" value="{{.ID}}" />
+                  <button class="btn btn-sm btn-success" type="submit" name="status" value="Gekauft">Als gekauft markieren</button>
+                  <button class="btn btn-sm btn-outline-secondary" type="submit" name="status" value="Nicht gekauft">Als nicht gekauft markieren</button>
+                </form>
+                {{end}}
               </div>
             </div>
           </li>

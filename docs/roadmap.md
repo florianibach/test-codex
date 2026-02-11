@@ -59,7 +59,7 @@ Als Käufer:in möchte ich beim Anlegen eine Wartezeit auswählen, damit das Ite
 
 ---
 
-### MVP-003 — Status-Automatik und manuelle Entscheidung
+### (done) MVP-003 — Status-Automatik und manuelle Entscheidung
 **User Story**  
 Als Käufer:in möchte ich einen klaren Statusverlauf sehen und final entscheiden können, damit mein Kaufverhalten nachvollziehbar bleibt.
 
