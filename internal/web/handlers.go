@@ -32,17 +32,37 @@ type Item struct {
 
 type homeViewData struct {
 	Title           string
+	CurrentPath     string
+	ContentTemplate string
+	ScriptTemplate  string
+	Items           []Item
+}
+
+type itemFormViewData struct {
+	Title           string
+	CurrentPath     string
+	ContentTemplate string
+	ScriptTemplate  string
 	Items           []Item
 	FormValues      Item
 	Error           string
+}
+
+type profileViewData struct {
+	Title           string
+	CurrentPath     string
+	ContentTemplate string
+	ScriptTemplate  string
 	ProfileHourly   string
 	ProfileError    string
 	ProfileFeedback string
-	ProfileEditing  bool
 }
 
 type pageData struct {
-	Title string
+	Title           string
+	CurrentPath     string
+	ContentTemplate string
+	ScriptTemplate  string
 }
 
 type App struct {
@@ -68,7 +88,9 @@ func NewApp() *App {
 
 func (a *App) routes() {
 	a.mux.HandleFunc("/", a.home)
-	a.mux.HandleFunc("/profile", a.saveProfile)
+	a.mux.HandleFunc("/items/new", a.itemForm)
+	a.mux.HandleFunc("/settings/profile", a.profileSettings)
+	a.mux.HandleFunc("/profile", a.legacyProfile)
 	a.mux.HandleFunc("/items/status", a.updateItemStatus)
 	a.mux.HandleFunc("/healthz", a.health)
 	a.mux.HandleFunc("/about", a.about)
@@ -87,10 +109,16 @@ func (a *App) home(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet, http.MethodHead:
-		a.renderHome(w, homeViewData{
-			Title:          "Impulse Pause",
-			ProfileEditing: r.URL.Query().Get("edit_profile") == "1",
-		})
+		a.renderHome(w, homeViewData{Title: "Impulse Pause", CurrentPath: "/"})
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (a *App) itemForm(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet, http.MethodHead:
+		a.renderItemForm(w, itemFormViewData{Title: "Add item", CurrentPath: "/items/new"})
 	case http.MethodPost:
 		a.createItem(w, r)
 	default:
@@ -116,10 +144,11 @@ func (a *App) createItem(w http.ResponseWriter, r *http.Request) {
 
 	if item.Title == "" {
 		w.WriteHeader(http.StatusBadRequest)
-		a.renderHome(w, homeViewData{
-			Title:      "Impulse Pause",
-			FormValues: item,
-			Error:      "Bitte gib einen Titel ein.",
+		a.renderItemForm(w, itemFormViewData{
+			Title:       "Add item",
+			CurrentPath: "/items/new",
+			FormValues:  item,
+			Error:       "Please enter a title.",
 		})
 		return
 	}
@@ -127,15 +156,16 @@ func (a *App) createItem(w http.ResponseWriter, r *http.Request) {
 	waitDuration, err := parseWaitDuration(item.WaitPreset, item.WaitCustomHours)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		a.renderHome(w, homeViewData{
-			Title:      "Impulse Pause",
-			FormValues: item,
-			Error:      err.Error(),
+		a.renderItemForm(w, itemFormViewData{
+			Title:       "Add item",
+			CurrentPath: "/items/new",
+			FormValues:  item,
+			Error:       err.Error(),
 		})
 		return
 	}
 
-	item.Status = "Wartet"
+	item.Status = "Waiting"
 	if item.WaitPreset == "" {
 		item.WaitPreset = "24h"
 	}
@@ -151,12 +181,37 @@ func (a *App) createItem(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
+func (a *App) profileSettings(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet, http.MethodHead:
+		a.renderProfile(w, profileViewData{
+			Title:           "Profile settings",
+			CurrentPath:     "/settings/profile",
+			ProfileFeedback: feedbackFromQuery(r),
+		})
+	case http.MethodPost:
+		a.saveProfile(w, r)
+	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (a *App) legacyProfile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/settings/profile", http.StatusSeeOther)
 		return
 	}
+	a.saveProfile(w, r)
+}
 
+func feedbackFromQuery(r *http.Request) string {
+	if r.URL.Query().Get("saved") == "1" {
+		return "Profile saved."
+	}
+	return ""
+}
+
+func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form data", http.StatusBadRequest)
 		return
@@ -165,11 +220,11 @@ func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 	hourlyWage := strings.TrimSpace(r.FormValue("hourly_wage"))
 	if _, err := parseHourlyWage(hourlyWage); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		a.renderHome(w, homeViewData{
-			Title:          "Impulse Pause",
-			ProfileHourly:  hourlyWage,
-			ProfileError:   err.Error(),
-			ProfileEditing: true,
+		a.renderProfile(w, profileViewData{
+			Title:         "Profile settings",
+			CurrentPath:   "/settings/profile",
+			ProfileHourly: hourlyWage,
+			ProfileError:  err.Error(),
 		})
 		return
 	}
@@ -178,12 +233,7 @@ func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 	a.hourlyWage = hourlyWage
 	a.mu.Unlock()
 
-	a.renderHome(w, homeViewData{
-		Title:           "Impulse Pause",
-		ProfileHourly:   hourlyWage,
-		ProfileFeedback: "Profil gespeichert.",
-		ProfileEditing:  false,
-	})
+	http.Redirect(w, r, "/settings/profile?saved=1", http.StatusSeeOther)
 }
 
 func (a *App) updateItemStatus(w http.ResponseWriter, r *http.Request) {
@@ -204,7 +254,7 @@ func (a *App) updateItemStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	newStatus := strings.TrimSpace(r.FormValue("status"))
-	if !slices.Contains([]string{"Gekauft", "Nicht gekauft"}, newStatus) {
+	if !slices.Contains([]string{"Bought", "Skipped"}, newStatus) {
 		http.Error(w, "invalid status", http.StatusBadRequest)
 		return
 	}
@@ -219,7 +269,7 @@ func (a *App) updateItemStatus(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		if a.items[i].Status != "Kauf erlaubt" {
+		if a.items[i].Status != "Ready to buy" {
 			http.Error(w, "status transition not allowed", http.StatusConflict)
 			return
 		}
@@ -247,11 +297,11 @@ func parseWaitDuration(waitPreset string, waitCustomHours string) (time.Duration
 	case "custom":
 		hours, err := strconv.ParseFloat(strings.TrimSpace(waitCustomHours), 64)
 		if err != nil || hours <= 0 {
-			return 0, errors.New("Bitte gib für Custom eine gültige Anzahl Stunden (> 0) ein.")
+			return 0, errors.New("Please enter a valid number of custom hours (> 0).")
 		}
 		return time.Duration(hours * float64(time.Hour)), nil
 	default:
-		return 0, errors.New("Bitte wähle eine gültige Wartezeit aus.")
+		return 0, errors.New("Please select a valid wait time.")
 	}
 }
 
@@ -259,22 +309,39 @@ func (a *App) renderHome(w http.ResponseWriter, data homeViewData) {
 	a.mu.Lock()
 	a.promoteReadyItemsLocked(time.Now())
 	data.Items = append([]Item(nil), a.items...)
+	data.ContentTemplate = "index_content"
+	data.ScriptTemplate = "index_script"
+	a.mu.Unlock()
+
+	renderTemplate(w, a.templates, "layout", data)
+}
+
+func (a *App) renderItemForm(w http.ResponseWriter, data itemFormViewData) {
+	a.mu.Lock()
+	a.promoteReadyItemsLocked(time.Now())
+	data.Items = append([]Item(nil), a.items...)
+	a.mu.Unlock()
+
+	data.ContentTemplate = "items_new_content"
+	data.ScriptTemplate = "items_new_script"
+	renderTemplate(w, a.templates, "layout", data)
+}
+
+func (a *App) renderProfile(w http.ResponseWriter, data profileViewData) {
+	a.mu.RLock()
 	if data.ProfileHourly == "" {
 		data.ProfileHourly = a.hourlyWage
 	}
-	a.mu.Unlock()
+	a.mu.RUnlock()
 
-	if data.ProfileHourly == "" || data.ProfileError != "" {
-		data.ProfileEditing = true
-	}
-
-	renderTemplate(w, a.templates, "index.html", data)
+	data.ContentTemplate = "profile_content"
+	renderTemplate(w, a.templates, "layout", data)
 }
 
 func parseHourlyWage(raw string) (float64, error) {
 	parsed, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
 	if err != nil || parsed <= 0 {
-		return 0, errors.New("Bitte gib einen gültigen Stundenlohn (> 0) ein.")
+		return 0, errors.New("Please enter a valid hourly wage (> 0).")
 	}
 
 	return parsed, nil
@@ -282,22 +349,22 @@ func parseHourlyWage(raw string) (float64, error) {
 
 func (a *App) promoteReadyItemsLocked(now time.Time) {
 	for i := range a.items {
-		if a.items[i].Status != "Wartet" {
+		if a.items[i].Status != "Waiting" {
 			continue
 		}
 		if !a.items[i].PurchaseAllowedAt.After(now) {
-			a.items[i].Status = "Kauf erlaubt"
+			a.items[i].Status = "Ready to buy"
 		}
 	}
 }
 
 func statusBadgeClass(status string) string {
 	switch status {
-	case "Kauf erlaubt":
+	case "Ready to buy":
 		return "text-bg-success"
-	case "Gekauft":
+	case "Bought":
 		return "text-bg-primary"
-	case "Nicht gekauft":
+	case "Skipped":
 		return "text-bg-secondary"
 	default:
 		return "text-bg-warning"
@@ -305,7 +372,7 @@ func statusBadgeClass(status string) string {
 }
 
 func (a *App) about(w http.ResponseWriter, r *http.Request) {
-	renderTemplate(w, a.templates, "about.html", pageData{Title: "About"})
+	renderTemplate(w, a.templates, "layout", pageData{Title: "About", CurrentPath: "/about", ContentTemplate: "about_content"})
 }
 
 func (a *App) health(w http.ResponseWriter, r *http.Request) {

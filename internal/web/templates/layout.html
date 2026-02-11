@@ -1,0 +1,42 @@
+{{define "layout"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{.Title}}</title>
+  <link href="/assets/app.css" rel="stylesheet">
+</head>
+<body class="bg-body-tertiary">
+  <header class="navbar shadow-sm">
+    <div class="container nav-container">
+      <a class="navbar-brand" href="/">Impulse Pause</a>
+      <nav class="navbar-nav" aria-label="Primary">
+        <a class="nav-link {{if eq .CurrentPath "/"}}active{{end}}" href="/">Dashboard</a>
+        <a class="nav-link {{if eq .CurrentPath "/items/new"}}active{{end}}" href="/items/new">Add item</a>
+        <a class="nav-link {{if eq .CurrentPath "/settings/profile"}}active{{end}}" href="/settings/profile">Settings</a>
+        <a class="nav-link {{if eq .CurrentPath "/about"}}active{{end}}" href="/about">About</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container py-3 py-md-4" style="max-width: 720px;">
+    {{if eq .ContentTemplate "index_content"}}
+      {{template "index_content" .}}
+    {{else if eq .ContentTemplate "items_new_content"}}
+      {{template "items_new_content" .}}
+    {{else if eq .ContentTemplate "profile_content"}}
+      {{template "profile_content" .}}
+    {{else if eq .ContentTemplate "about_content"}}
+      {{template "about_content" .}}
+    {{end}}
+  </main>
+
+  {{if eq .ScriptTemplate "index_script"}}
+    {{template "index_script" .}}
+  {{else if eq .ScriptTemplate "items_new_script"}}
+    {{template "items_new_script" .}}
+  {{end}}
+</body>
+</html>
+{{end}}

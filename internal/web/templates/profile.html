@@ -1,0 +1,23 @@
+{{define "profile_content"}}
+<section class="card shadow-sm">
+  <div class="card-body">
+    <h1 class="h3 mb-1">Profile settings</h1>
+    <p class="text-secondary small mb-3">Usually configured once, available anytime.</p>
+
+    {{if .ProfileError}}
+    <div class="alert alert-danger py-2" role="alert">{{.ProfileError}}</div>
+    {{end}}
+    {{if .ProfileFeedback}}
+    <div class="alert alert-success py-2" role="status">{{.ProfileFeedback}}</div>
+    {{end}}
+
+    <form id="profile-edit-form" method="post" action="/settings/profile" class="vstack gap-3">
+      <div>
+        <label for="hourly_wage" class="form-label">Net hourly wage</label>
+        <input id="hourly_wage" name="hourly_wage" type="number" min="0.01" step="0.01" inputmode="decimal" class="form-control" placeholder="e.g. 25" value="{{.ProfileHourly}}" required />
+      </div>
+      <button id="profile-save-btn" class="btn btn-outline-primary" type="submit">Save profile</button>
+    </form>
+  </div>
+</section>
+{{end}}
