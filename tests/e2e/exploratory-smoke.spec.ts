@@ -67,8 +67,9 @@ test('MVP-001: title-only add flow creates waiting item', async ({ page }) => {
   await page.getByLabel('Titel *').fill('Neue Tastatur');
   await page.getByRole('button', { name: 'Zur Warteliste hinzufügen' }).click();
 
-  await expect(page.getByText('Neue Tastatur')).toBeVisible();
-  await expect(page.getByText('Wartet')).toBeVisible();
+  const newItemRow = page.locator('li.list-group-item').filter({ hasText: 'Neue Tastatur' });
+  await expect(newItemRow).toBeVisible();
+  await expect(newItemRow.getByText('Wartet')).toBeVisible();
 });
 
 test('MVP-001: empty title shows validation', async ({ page }) => {
