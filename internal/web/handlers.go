@@ -31,10 +31,13 @@ type Item struct {
 }
 
 type homeViewData struct {
-	Title      string
-	Items      []Item
-	FormValues Item
-	Error      string
+	Title           string
+	Items           []Item
+	FormValues      Item
+	Error           string
+	ProfileHourly   string
+	ProfileError    string
+	ProfileFeedback string
 }
 
 type pageData struct {
@@ -42,11 +45,12 @@ type pageData struct {
 }
 
 type App struct {
-	templates *template.Template
-	mux       *http.ServeMux
-	mu        sync.RWMutex
-	items     []Item
-	nextID    int
+	templates  *template.Template
+	mux        *http.ServeMux
+	mu         sync.RWMutex
+	items      []Item
+	hourlyWage string
+	nextID     int
 }
 
 func NewApp() *App {
@@ -63,6 +67,7 @@ func NewApp() *App {
 
 func (a *App) routes() {
 	a.mux.HandleFunc("/", a.home)
+	a.mux.HandleFunc("/profile", a.saveProfile)
 	a.mux.HandleFunc("/items/status", a.updateItemStatus)
 	a.mux.HandleFunc("/healthz", a.health)
 	a.mux.HandleFunc("/about", a.about)
@@ -142,6 +147,39 @@ func (a *App) createItem(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
+func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	hourlyWage := strings.TrimSpace(r.FormValue("hourly_wage"))
+	if _, err := parseHourlyWage(hourlyWage); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		a.renderHome(w, homeViewData{
+			Title:         "Impulse Pause",
+			ProfileHourly: hourlyWage,
+			ProfileError:  err.Error(),
+		})
+		return
+	}
+
+	a.mu.Lock()
+	a.hourlyWage = hourlyWage
+	a.mu.Unlock()
+
+	a.renderHome(w, homeViewData{
+		Title:           "Impulse Pause",
+		ProfileHourly:   hourlyWage,
+		ProfileFeedback: "Profil gespeichert.",
+	})
+}
+
 func (a *App) updateItemStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -215,9 +253,21 @@ func (a *App) renderHome(w http.ResponseWriter, data homeViewData) {
 	a.mu.Lock()
 	a.promoteReadyItemsLocked(time.Now())
 	data.Items = append([]Item(nil), a.items...)
+	if data.ProfileHourly == "" {
+		data.ProfileHourly = a.hourlyWage
+	}
 	a.mu.Unlock()
 
 	renderTemplate(w, a.templates, "index.html", data)
+}
+
+func parseHourlyWage(raw string) (float64, error) {
+	parsed, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
+	if err != nil || parsed <= 0 {
+		return 0, errors.New("Bitte gib einen gültigen Stundenlohn (> 0) ein.")
+	}
+
+	return parsed, nil
 }
 
 func (a *App) promoteReadyItemsLocked(now time.Time) {

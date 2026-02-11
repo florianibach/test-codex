@@ -419,6 +419,99 @@ func TestParseWaitDuration(t *testing.T) {
 	}
 }
 
+func TestProfileCanBeSavedAndPersisted(t *testing.T) {
+	app := NewApp()
+	form := url.Values{}
+	form.Set("hourly_wage", "42.5")
+
+	req := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if body := rr.Body.String(); !strings.Contains(body, "Profil gespeichert.") {
+		t.Fatalf("expected success feedback in response body")
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	getRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(getRR, getReq)
+
+	if body := getRR.Body.String(); !strings.Contains(body, "value=\"42.5\"") {
+		t.Fatalf("expected persisted hourly wage in profile form")
+	}
+}
+
+func TestProfileValidation(t *testing.T) {
+	app := NewApp()
+	form := url.Values{}
+	form.Set("hourly_wage", "0")
+
+	req := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+	if body := rr.Body.String(); !strings.Contains(body, "gültigen Stundenlohn") {
+		t.Fatalf("expected hourly wage validation in response body")
+	}
+}
+
+func TestProfileRouteMethodNotAllowed(t *testing.T) {
+	app := NewApp()
+	req := httptest.NewRequest(http.MethodGet, "/profile", nil)
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", rr.Code)
+	}
+}
+
+func TestParseHourlyWage(t *testing.T) {
+	tests := []struct {
+		name            string
+		raw             string
+		want            float64
+		wantErrContains string
+	}{
+		{name: "valid", raw: "20", want: 20},
+		{name: "valid decimal", raw: "17.5", want: 17.5},
+		{name: "trimmed", raw: " 33 ", want: 33},
+		{name: "empty", raw: "", wantErrContains: "gültigen Stundenlohn"},
+		{name: "zero", raw: "0", wantErrContains: "gültigen Stundenlohn"},
+		{name: "negative", raw: "-2", wantErrContains: "gültigen Stundenlohn"},
+		{name: "not numeric", raw: "abc", wantErrContains: "gültigen Stundenlohn"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseHourlyWage(tt.raw)
+			if tt.wantErrContains != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErrContains) {
+					t.Fatalf("expected error containing %q, got %v", tt.wantErrContains, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("expected %v, got %v", tt.want, got)
+			}
+		})
+	}
+}
+
 func TestHealthRoute(t *testing.T) {
 	app := NewApp()
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)

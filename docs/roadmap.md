@@ -79,7 +79,7 @@ Als Käufer:in möchte ich einen klaren Statusverlauf sehen und final entscheide
 
 ---
 
-### MVP-004 — Profil mit Stundenlohn (Single User, lokal)
+### (done) MVP-004 — Profil mit Stundenlohn (Single User, lokal)
 **User Story**  
 Als Nutzer:in möchte ich meinen Netto-Stundenwert einmalig konfigurieren, damit die App mir Arbeitsstunden als Reality-Check anzeigen kann.
 

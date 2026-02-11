@@ -184,6 +184,29 @@ test('MVP-002: purchase-allowed timestamp is rendered in browser locale from dat
   await expect(timeElement).toHaveText(expectedText);
 });
 
+
+test('MVP-004: profile hourly wage can be saved and remains visible', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByLabel('Netto-Stundenlohn').fill('31.5');
+  await page.getByRole('button', { name: 'Profil speichern' }).click();
+
+  await expect(page.getByRole('status')).toContainText('Profil gespeichert.');
+  await expect(page.getByLabel('Netto-Stundenlohn')).toHaveValue('31.5');
+
+  await page.reload();
+  await expect(page.getByLabel('Netto-Stundenlohn')).toHaveValue('31.5');
+});
+
+test('MVP-004: profile validates invalid hourly wage', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByLabel('Netto-Stundenlohn').fill('0');
+  await page.getByRole('button', { name: 'Profil speichern' }).click();
+
+  await expect(page.getByRole('alert')).toContainText('gültigen Stundenlohn');
+});
+
 async function waitForItemStatus(page, title: string, status: string) {
   const itemRow = page.locator('li.list-group-item').filter({ hasText: title }).first();
 
