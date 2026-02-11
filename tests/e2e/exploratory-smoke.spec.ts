@@ -78,6 +78,7 @@ test('title-only add flow creates waiting item', async ({ page }) => {
   const newItemRow = page.locator('li.list-group-item').filter({ hasText: title }).first();
   await expect(newItemRow).toBeVisible();
   await expect(newItemRow.getByText('Waiting')).toBeVisible();
+  await expect(newItemRow).not.toContainText('Work hours:');
 });
 
 test('empty title shows validation', async ({ page }) => {

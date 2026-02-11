@@ -177,6 +177,27 @@ func TestHomeShowsNeutralWorkHoursHintWhenDataMissing(t *testing.T) {
 	}
 }
 
+func TestHomeDoesNotShowWorkHoursSectionWithoutPrice(t *testing.T) {
+	app := NewApp()
+
+	app.mu.Lock()
+	app.hourlyWage = "25"
+	app.items = append(app.items, Item{ID: 1, Title: "Headphones", Status: "Waiting", PurchaseAllowedAt: time.Now().Add(24 * time.Hour)})
+	app.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	if strings.Contains(body, "Work hours:") {
+		t.Fatalf("did not expect work hours text without price")
+	}
+}
+
 func TestCreateItemValidationKeepsCustomHoursVisible(t *testing.T) {
 	app := NewApp()
 	form := url.Values{}

@@ -34,10 +34,12 @@
           <div class="text-end">
             <span class="badge {{statusBadgeClass .Status}}">{{.Status}}</span>
             {{if .Price}}<p class="small text-secondary mb-0 mt-1">{{.Price}}</p>{{end}}
+            {{if .Price}}
             {{if workHoursAvailable . $.HourlyWage $.HasHourlyWage}}
             <p class="small text-secondary mb-0 mt-1">Work hours: {{formatWorkHours . $.HourlyWage}} h</p>
             {{else}}
             <p class="small text-secondary mb-0 mt-1">Work hours: add a valid price and hourly wage.</p>
+            {{end}}
             {{end}}
             <p class="small text-secondary mb-0 mt-1">
               Buy after:
