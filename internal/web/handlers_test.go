@@ -20,6 +20,18 @@ func TestHomeRoute(t *testing.T) {
 	}
 }
 
+func TestHomeRouteHead(t *testing.T) {
+	app := NewApp()
+	req := httptest.NewRequest(http.MethodHead, "/", nil)
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+}
+
 func TestAssetsRoute(t *testing.T) {
 	app := NewApp()
 	req := httptest.NewRequest(http.MethodGet, "/assets/app.css", nil)

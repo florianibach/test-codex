@@ -69,7 +69,7 @@ func (a *App) home(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch r.Method {
-	case http.MethodGet:
+	case http.MethodGet, http.MethodHead:
 		a.renderHome(w, homeViewData{Title: "Impulse Pause"})
 	case http.MethodPost:
 		a.createItem(w, r)
