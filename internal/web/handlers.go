@@ -10,8 +10,8 @@ import (
 	"time"
 )
 
-//go:embed templates/*.html
-var templateFS embed.FS
+//go:embed templates/*.html assets/*.css
+var embeddedFiles embed.FS
 
 type Item struct {
 	Title     string
@@ -42,7 +42,7 @@ type App struct {
 }
 
 func NewApp() *App {
-	tpls := template.Must(template.ParseFS(templateFS, "templates/*.html"))
+	tpls := template.Must(template.ParseFS(embeddedFiles, "templates/*.html"))
 	mux := http.NewServeMux()
 
 	app := &App{templates: tpls, mux: mux}
@@ -55,6 +55,7 @@ func (a *App) routes() {
 	a.mux.HandleFunc("/", a.home)
 	a.mux.HandleFunc("/healthz", a.health)
 	a.mux.HandleFunc("/about", a.about)
+	a.mux.Handle("/assets/", http.FileServer(http.FS(embeddedFiles)))
 }
 
 func (a *App) Handler() http.Handler {

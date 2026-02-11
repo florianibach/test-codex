@@ -20,6 +20,24 @@ func TestHomeRoute(t *testing.T) {
 	}
 }
 
+func TestAssetsRoute(t *testing.T) {
+	app := NewApp()
+	req := httptest.NewRequest(http.MethodGet, "/assets/app.css", nil)
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if contentType := rr.Header().Get("Content-Type"); !strings.Contains(contentType, "text/css") {
+		t.Fatalf("expected text/css content type, got %s", contentType)
+	}
+	if body := rr.Body.String(); !strings.Contains(body, ".btn-primary") {
+		t.Fatalf("expected css body content")
+	}
+}
+
 func TestCreateItemWithOnlyTitle(t *testing.T) {
 	app := NewApp()
 	form := url.Values{}
