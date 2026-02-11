@@ -202,6 +202,13 @@ test('MVP-004: profile validates invalid hourly wage', async ({ page }) => {
   await page.goto('/');
 
   await page.getByLabel('Netto-Stundenlohn').fill('0');
+
+  // Browser number constraints (min/required) can block submit before backend validation.
+  // Disable native form validation here to verify server-side hourly wage validation.
+  await page.locator('form[action="/profile"]').evaluate((form) => {
+    (form as HTMLFormElement).noValidate = true;
+  });
+
   await page.getByRole('button', { name: 'Profil speichern' }).click();
 
   await expect(page.getByRole('alert')).toContainText('gültigen Stundenlohn');
