@@ -99,8 +99,17 @@ Install:
 
 ```bash
 npm ci
+npm run setup:e2e:deps
+```
+
+If your environment reports missing browser runtime libraries (for example `libatk-1.0.so.0`) or Chromium crashes in headless mode, run the dependency step again after `apt` metadata refresh:
+
+```bash
+sudo apt-get update
 npx playwright install --with-deps chromium
 ```
+
+On Ubuntu 24.04 the package name is `libatk1.0-0t64` (not `libatk1.0-0`), and Playwright installs the correct `t64` variants automatically when using `--with-deps`.
 
 Run smoke suite:
 
