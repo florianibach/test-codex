@@ -373,6 +373,47 @@ func TestCreateItemWithSpecificDateWaitPreset(t *testing.T) {
 	}
 }
 
+func TestCreateItemWithSpecificDateUsesLocalTimezone(t *testing.T) {
+	originalLocal := time.Local
+	loc := time.FixedZone("UTC+1", 1*60*60)
+	time.Local = loc
+	t.Cleanup(func() {
+		time.Local = originalLocal
+	})
+
+	app := NewApp()
+	seedProfile(app)
+
+	form := url.Values{}
+	form.Set("title", "Timezone item")
+	form.Set("wait_preset", "date")
+	form.Set("purchase_allowed_at", "2026-01-15T19:45")
+
+	req := httptest.NewRequest(http.MethodPost, "/items/new", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", rr.Code)
+	}
+
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if len(app.items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(app.items))
+	}
+
+	got := app.items[0].PurchaseAllowedAt
+	if got.Location() != loc {
+		t.Fatalf("expected parsed location %q, got %q", loc.String(), got.Location().String())
+	}
+	if got.Hour() != 19 || got.Minute() != 45 {
+		t.Fatalf("expected local 19:45, got %02d:%02d", got.Hour(), got.Minute())
+	}
+}
+
 func TestCreateItemWithSpecificDateRequiresDateInput(t *testing.T) {
 	app := NewApp()
 	seedProfile(app)

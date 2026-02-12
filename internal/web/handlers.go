@@ -610,7 +610,7 @@ func (a *App) updateItemStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func parsePurchaseAllowedAt(raw string) (time.Time, error) {
-	parsed, err := time.Parse("2006-01-02T15:04", strings.TrimSpace(raw))
+	parsed, err := time.ParseInLocation("2006-01-02T15:04", strings.TrimSpace(raw), time.Local)
 	if err != nil {
 		return time.Time{}, errors.New("Please enter a valid buy-after date and time.")
 	}
