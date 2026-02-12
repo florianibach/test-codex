@@ -343,6 +343,22 @@ func TestStatusUpdateFromWaitingReturnsConflict(t *testing.T) {
 	}
 }
 
+func TestParsePurchaseAllowedAtWithTimezoneOffset(t *testing.T) {
+	parsed, err := parsePurchaseAllowedAt("2026-02-12T10:30", "-120")
+	if err != nil {
+		t.Fatalf("expected valid datetime, got %v", err)
+	}
+	if got := parsed.Format(time.RFC3339); got != "2026-02-12T10:30:00+02:00" {
+		t.Fatalf("unexpected parsed datetime %q", got)
+	}
+}
+
+func TestParsePurchaseAllowedAtRejectsInvalidTimezoneOffset(t *testing.T) {
+	if _, err := parsePurchaseAllowedAt("2026-02-12T10:30", "oops"); err == nil {
+		t.Fatalf("expected timezone parse error")
+	}
+}
+
 func TestCreateItemWithSpecificDateWaitPreset(t *testing.T) {
 	app := NewApp()
 	seedProfile(app)

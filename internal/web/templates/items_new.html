@@ -32,6 +32,7 @@
       <div id="purchase-allowed-group" {{if ne .FormValues.WaitPreset "date"}}hidden{{end}}>
         <label for="purchase_allowed_at" class="form-label">Buy after</label>
         <input id="purchase_allowed_at" name="purchase_allowed_at" type="datetime-local" class="form-control" value="{{.PurchaseAllowedInput}}" {{if ne .FormValues.WaitPreset "date"}}disabled{{end}} />
+        <input id="timezone_offset_minutes" name="timezone_offset_minutes" type="hidden" value="" />
       </div>
 
       <div>
@@ -68,6 +69,11 @@
     var customHoursInput = document.getElementById("wait_custom_hours");
     var purchaseAllowedGroup = document.getElementById("purchase-allowed-group");
     var purchaseAllowedInput = document.getElementById("purchase_allowed_at");
+    var timezoneOffsetMinutesInput = document.getElementById("timezone_offset_minutes");
+
+    if (timezoneOffsetMinutesInput) {
+      timezoneOffsetMinutesInput.value = String(new Date().getTimezoneOffset());
+    }
 
     function syncWaitInputVisibility() {
       if (!waitPreset || !customHoursGroup || !customHoursInput || !purchaseAllowedGroup || !purchaseAllowedInput) {
