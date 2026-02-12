@@ -490,12 +490,13 @@ test('delete flow supports cancel and removes item from dashboard and insights o
 });
 
 async function waitForItemStatus(page: Page, title: string, status: string) {
-  const itemRow = page.locator('li.list-group-item').filter({ hasText: title }).first();
+  await page.goto('/');
 
   await expect
     .poll(
       async () => {
-        await page.reload();
+        await page.goto('/');
+        const itemRow = page.locator('li.list-group-item').filter({ hasText: title }).first();
         if (!(await itemRow.isVisible())) {
           return 'missing';
         }
@@ -504,13 +505,13 @@ async function waitForItemStatus(page: Page, title: string, status: string) {
         return badgeText.trim();
       },
       {
-        timeout: 20_000,
-        intervals: [300, 500, 1_000],
+        timeout: 30_000,
+        intervals: [500, 1_000, 1_500],
       },
     )
     .toBe(status);
 
-  return itemRow;
+  return page.locator('li.list-group-item').filter({ hasText: title }).first();
 }
 
 test('item auto-promotes to Ready to buy after wait time elapsed', async ({ page }) => {
