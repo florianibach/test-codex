@@ -62,11 +62,32 @@ type insightsViewData struct {
 	SkippedCount    int
 	SavedAmount     float64
 	TopCategories   []categoryCount
+	DecisionTrend   []monthlyDecisionTrend
+	SavedTrend      []monthlySavedAmount
+	CategoryRatios  []categorySkipRatio
 }
 
 type categoryCount struct {
 	Name  string
 	Count int
+}
+
+type monthlyDecisionTrend struct {
+	Month        string
+	BoughtCount  int
+	SkippedCount int
+}
+
+type monthlySavedAmount struct {
+	Month  string
+	Amount float64
+}
+
+type categorySkipRatio struct {
+	Name          string
+	SkippedCount  int
+	DecisionCount int
+	Ratio         float64
 }
 
 type itemFormViewData struct {
@@ -147,6 +168,7 @@ func newAppWithDB(db *sql.DB) (*App, error) {
 		"statusBadgeClass":   statusBadgeClass,
 		"workHoursAvailable": workHoursAvailable,
 		"formatWorkHours":    formatWorkHours,
+		"mul100":             mul100,
 	}).ParseFS(embeddedFiles, "templates/*.html"))
 	mux := http.NewServeMux()
 
@@ -913,6 +935,9 @@ func (a *App) renderInsights(w http.ResponseWriter, data insightsViewData) {
 	a.promoteReadyItemsLocked(time.Now())
 	data.ItemCount = len(a.items)
 	data.SkippedCount, data.SavedAmount, data.TopCategories = buildDashboardStats(a.items)
+	data.DecisionTrend = buildMonthlyDecisionTrend(a.items)
+	data.SavedTrend = buildMonthlySavedTrend(a.items)
+	data.CategoryRatios = buildCategorySkipRatios(a.items)
 	a.mu.Unlock()
 
 	data.ContentTemplate = "insights_content"
@@ -1113,6 +1138,126 @@ func buildDashboardStats(items []Item) (skippedCount int, savedAmount float64, t
 	return skippedCount, savedAmount, topCategories
 }
 
+func buildMonthlyDecisionTrend(items []Item) []monthlyDecisionTrend {
+	monthly := map[string]*monthlyDecisionTrend{}
+	for _, item := range items {
+		if item.Status != "Bought" && item.Status != "Skipped" {
+			continue
+		}
+		month := item.CreatedAt.Format("2006-01")
+		bucket, exists := monthly[month]
+		if !exists {
+			bucket = &monthlyDecisionTrend{Month: month}
+			monthly[month] = bucket
+		}
+		if item.Status == "Bought" {
+			bucket.BoughtCount++
+		} else {
+			bucket.SkippedCount++
+		}
+	}
+
+	if len(monthly) == 0 {
+		return nil
+	}
+
+	months := mapKeys(monthly)
+	slices.Sort(months)
+
+	trends := make([]monthlyDecisionTrend, 0, len(months))
+	for _, month := range months {
+		trends = append(trends, *monthly[month])
+	}
+
+	return trends
+}
+
+func buildMonthlySavedTrend(items []Item) []monthlySavedAmount {
+	monthly := map[string]float64{}
+	for _, item := range items {
+		if item.Status != "Skipped" || !item.HasPriceValue {
+			continue
+		}
+		month := item.CreatedAt.Format("2006-01")
+		monthly[month] += item.PriceValue
+	}
+
+	if len(monthly) == 0 {
+		return nil
+	}
+
+	months := mapKeys(monthly)
+	slices.Sort(months)
+
+	trend := make([]monthlySavedAmount, 0, len(months))
+	for _, month := range months {
+		trend = append(trend, monthlySavedAmount{Month: month, Amount: monthly[month]})
+	}
+
+	return trend
+}
+
+func buildCategorySkipRatios(items []Item) []categorySkipRatio {
+	decisions := map[string]int{}
+	skips := map[string]int{}
+
+	for _, item := range items {
+		if item.Status != "Bought" && item.Status != "Skipped" {
+			continue
+		}
+
+		for _, category := range categoriesFromTags(item.Tags) {
+			decisions[category]++
+			if item.Status == "Skipped" {
+				skips[category]++
+			}
+		}
+	}
+
+	if len(decisions) == 0 {
+		return nil
+	}
+
+	result := make([]categorySkipRatio, 0, len(decisions))
+	for category, decisionCount := range decisions {
+		skipped := skips[category]
+		ratio := float64(skipped) / float64(decisionCount)
+		result = append(result, categorySkipRatio{
+			Name:          category,
+			SkippedCount:  skipped,
+			DecisionCount: decisionCount,
+			Ratio:         ratio,
+		})
+	}
+
+	slices.SortFunc(result, func(a, b categorySkipRatio) int {
+		if a.Ratio != b.Ratio {
+			if a.Ratio > b.Ratio {
+				return -1
+			}
+			return 1
+		}
+		if a.DecisionCount != b.DecisionCount {
+			return b.DecisionCount - a.DecisionCount
+		}
+		return strings.Compare(a.Name, b.Name)
+	})
+
+	if len(result) > 5 {
+		result = result[:5]
+	}
+
+	return result
+}
+
+func mapKeys[T any](in map[string]T) []string {
+	keys := make([]string, 0, len(in))
+	for key := range in {
+		keys = append(keys, key)
+	}
+	return keys
+}
+
 func categoriesFromTags(rawTags string) []string {
 	if strings.TrimSpace(rawTags) == "" {
 		return nil
@@ -1137,6 +1282,9 @@ func categoriesFromTags(rawTags string) []string {
 	return categories
 }
 
+func mul100(v float64) float64 {
+	return v * 100
+}
 func statusBadgeClass(status string) string {
 	switch status {
 	case "Ready to buy":

@@ -1272,6 +1272,95 @@ func TestBuildDashboardStatsSortsAndLimitsCategories(t *testing.T) {
 		t.Fatalf("unexpected third category: %+v", categories[2])
 	}
 }
+
+func TestBuildMonthlyDecisionTrend(t *testing.T) {
+	now := time.Now()
+	items := []Item{
+		{Status: "Skipped", CreatedAt: time.Date(2026, 1, 4, 12, 0, 0, 0, now.Location())},
+		{Status: "Bought", CreatedAt: time.Date(2026, 1, 14, 12, 0, 0, 0, now.Location())},
+		{Status: "Skipped", CreatedAt: time.Date(2026, 2, 2, 12, 0, 0, 0, now.Location())},
+		{Status: "Waiting", CreatedAt: time.Date(2026, 2, 3, 12, 0, 0, 0, now.Location())},
+	}
+
+	trend := buildMonthlyDecisionTrend(items)
+	if len(trend) != 2 {
+		t.Fatalf("expected 2 months, got %d", len(trend))
+	}
+	if trend[0].Month != "2026-01" || trend[0].BoughtCount != 1 || trend[0].SkippedCount != 1 {
+		t.Fatalf("unexpected first month: %+v", trend[0])
+	}
+	if trend[1].Month != "2026-02" || trend[1].BoughtCount != 0 || trend[1].SkippedCount != 1 {
+		t.Fatalf("unexpected second month: %+v", trend[1])
+	}
+}
+
+func TestBuildMonthlySavedTrend(t *testing.T) {
+	now := time.Now()
+	items := []Item{
+		{Status: "Skipped", HasPriceValue: true, PriceValue: 40.5, CreatedAt: time.Date(2026, 1, 4, 12, 0, 0, 0, now.Location())},
+		{Status: "Skipped", HasPriceValue: true, PriceValue: 9.5, CreatedAt: time.Date(2026, 1, 14, 12, 0, 0, 0, now.Location())},
+		{Status: "Skipped", HasPriceValue: false, CreatedAt: time.Date(2026, 2, 2, 12, 0, 0, 0, now.Location())},
+		{Status: "Bought", HasPriceValue: true, PriceValue: 100, CreatedAt: time.Date(2026, 2, 3, 12, 0, 0, 0, now.Location())},
+	}
+
+	trend := buildMonthlySavedTrend(items)
+	if len(trend) != 1 {
+		t.Fatalf("expected 1 month, got %d", len(trend))
+	}
+	if trend[0].Month != "2026-01" || trend[0].Amount != 50 {
+		t.Fatalf("unexpected saved trend: %+v", trend[0])
+	}
+}
+
+func TestBuildCategorySkipRatios(t *testing.T) {
+	items := []Item{
+		{Status: "Skipped", Tags: "Tech, Home"},
+		{Status: "Skipped", Tags: "Tech"},
+		{Status: "Bought", Tags: "Tech"},
+		{Status: "Bought", Tags: "Home"},
+		{Status: "Waiting", Tags: "Tech"},
+	}
+
+	ratios := buildCategorySkipRatios(items)
+	if len(ratios) != 2 {
+		t.Fatalf("expected 2 category ratios, got %d", len(ratios))
+	}
+	if ratios[0].Name != "tech" || ratios[0].SkippedCount != 2 || ratios[0].DecisionCount != 3 {
+		t.Fatalf("unexpected first ratio: %+v", ratios[0])
+	}
+	if ratios[1].Name != "home" || ratios[1].SkippedCount != 1 || ratios[1].DecisionCount != 2 {
+		t.Fatalf("unexpected second ratio: %+v", ratios[1])
+	}
+}
+
+func TestInsightsPageShowsTrendSections(t *testing.T) {
+	app := NewApp()
+
+	app.mu.Lock()
+	app.items = append(app.items,
+		Item{ID: 1, Title: "Keyboard", Price: "99.99", PriceValue: 99.99, HasPriceValue: true, Tags: "Tech", Status: "Skipped", CreatedAt: time.Date(2026, 1, 11, 12, 0, 0, 0, time.Local), PurchaseAllowedAt: time.Now().Add(-time.Hour)},
+		Item{ID: 2, Title: "Shoes", Price: "120", PriceValue: 120, HasPriceValue: true, Tags: "Fashion", Status: "Bought", CreatedAt: time.Date(2026, 1, 14, 12, 0, 0, 0, time.Local), PurchaseAllowedAt: time.Now().Add(-time.Hour)},
+	)
+	app.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/insights", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "Monthly decision trend") || !strings.Contains(body, "2026-01") {
+		t.Fatalf("expected monthly decision trend section")
+	}
+	if !strings.Contains(body, "Saved amount trend") || !strings.Contains(body, "99.99") {
+		t.Fatalf("expected monthly saved trend section")
+	}
+	if !strings.Contains(body, "Top skip ratios by category") || !strings.Contains(body, "100%") {
+		t.Fatalf("expected category ratio section")
+	}
+}
 func TestHealthRoute(t *testing.T) {
 	app := NewApp()
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
