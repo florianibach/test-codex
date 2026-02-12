@@ -72,7 +72,7 @@ SQLite DB (persisted via Docker volume): `app-data` at `/app/data/app.db`.
 
 ## App flow at a glance
 
-- **Dashboard (`/`)**: All captured items with status, price, and "Buy after" timestamp
+- **Dashboard (`/`)**: All captured items with status, price, "Buy after" timestamp plus search, status/tag filters and sorting
 - **Add item (`/items/new`)**: Capture a new purchase idea and set a waiting period
 - **Insights (`/insights`)**: Overview of skips, saved amount, and top categories
 - **Settings (`/settings/profile`)**: Net hourly wage and optional ntfy notification settings

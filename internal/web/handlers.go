@@ -43,6 +43,11 @@ type homeViewData struct {
 	ContentTemplate string
 	ScriptTemplate  string
 	Items           []Item
+	SearchQuery     string
+	StatusFilter    string
+	TagFilter       string
+	SortBy          string
+	TotalItems      int
 	HourlyWage      float64
 	HasHourlyWage   bool
 }
@@ -214,7 +219,7 @@ func (a *App) home(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/settings/profile", http.StatusSeeOther)
 			return
 		}
-		a.renderHome(w, homeViewData{Title: "Impulse Pause", CurrentPath: "/"})
+		a.renderHome(w, r, homeViewData{Title: "Impulse Pause", CurrentPath: "/"})
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -797,14 +802,103 @@ func (a *App) hasProfile() bool {
 	return strings.TrimSpace(a.hourlyWage) != ""
 }
 
-func (a *App) renderHome(w http.ResponseWriter, data homeViewData) {
+func normalizeSortBy(raw string) string {
+	switch strings.TrimSpace(raw) {
+	case "newest", "oldest", "price_asc", "price_desc":
+		return strings.TrimSpace(raw)
+	default:
+		return "next_ready"
+	}
+}
+
+func filterAndSortItems(items []Item, searchQuery string, statusFilter string, tagFilter string, sortBy string) []Item {
+	trimmedSearch := strings.ToLower(strings.TrimSpace(searchQuery))
+	trimmedStatus := strings.TrimSpace(statusFilter)
+	trimmedTag := strings.ToLower(strings.TrimSpace(tagFilter))
+
+	filtered := make([]Item, 0, len(items))
+	for _, item := range items {
+		if trimmedStatus != "" && item.Status != trimmedStatus {
+			continue
+		}
+
+		if trimmedTag != "" && !strings.Contains(strings.ToLower(item.Tags), trimmedTag) {
+			continue
+		}
+
+		if trimmedSearch != "" {
+			haystack := strings.ToLower(strings.Join([]string{item.Title, item.Note, item.Link, item.Tags}, " "))
+			if !strings.Contains(haystack, trimmedSearch) {
+				continue
+			}
+		}
+
+		filtered = append(filtered, item)
+	}
+
+	slices.SortStableFunc(filtered, func(a, b Item) int {
+		switch sortBy {
+		case "newest":
+			if cmp := b.CreatedAt.Compare(a.CreatedAt); cmp != 0 {
+				return cmp
+			}
+		case "oldest":
+			if cmp := a.CreatedAt.Compare(b.CreatedAt); cmp != 0 {
+				return cmp
+			}
+		case "price_asc", "price_desc":
+			if a.HasPriceValue != b.HasPriceValue {
+				if a.HasPriceValue {
+					return -1
+				}
+				return 1
+			}
+			if a.HasPriceValue && b.HasPriceValue {
+				if sortBy == "price_asc" {
+					if cmp := a.PriceValue - b.PriceValue; cmp != 0 {
+						if cmp < 0 {
+							return -1
+						}
+						return 1
+					}
+				} else {
+					if cmp := b.PriceValue - a.PriceValue; cmp != 0 {
+						if cmp < 0 {
+							return -1
+						}
+						return 1
+					}
+				}
+			}
+		default:
+			if cmp := a.PurchaseAllowedAt.Compare(b.PurchaseAllowedAt); cmp != 0 {
+				return cmp
+			}
+		}
+
+		if cmp := b.CreatedAt.Compare(a.CreatedAt); cmp != 0 {
+			return cmp
+		}
+		return b.ID - a.ID
+	})
+
+	return filtered
+}
+
+func (a *App) renderHome(w http.ResponseWriter, r *http.Request, data homeViewData) {
 	a.mu.Lock()
 	a.promoteReadyItemsLocked(time.Now())
-	data.Items = append([]Item(nil), a.items...)
+	allItems := append([]Item(nil), a.items...)
+	data.TotalItems = len(allItems)
 	if parsedWage, err := parseHourlyWage(a.hourlyWage); err == nil {
 		data.HourlyWage = parsedWage
 		data.HasHourlyWage = true
 	}
+	data.SearchQuery = strings.TrimSpace(r.URL.Query().Get("q"))
+	data.StatusFilter = strings.TrimSpace(r.URL.Query().Get("status"))
+	data.TagFilter = strings.TrimSpace(r.URL.Query().Get("tag"))
+	data.SortBy = normalizeSortBy(r.URL.Query().Get("sort"))
+	data.Items = filterAndSortItems(allItems, data.SearchQuery, data.StatusFilter, data.TagFilter, data.SortBy)
 	data.ContentTemplate = "index_content"
 	data.ScriptTemplate = "index_script"
 	a.mu.Unlock()
