@@ -230,6 +230,62 @@ test('editing a skipped item with future wait time reopens it as waiting', async
   await expect(waitingRow.getByText('Waiting')).toBeVisible();
 });
 
+
+async function readInsightsMetrics(page: Page) {
+  const metricsSection = page.locator('section.card').filter({ hasText: 'Skipped items' }).first();
+
+  const skippedRaw = (await metricsSection.locator('article.metric-card').filter({ hasText: 'Skipped items' }).locator('p.h3').textContent()) ?? '0';
+  const savedRaw = (await metricsSection.locator('article.metric-card').filter({ hasText: 'Saved total' }).locator('p.h3').textContent()) ?? '0';
+
+  const skipped = Number.parseInt(skippedRaw.trim(), 10);
+  const saved = Number.parseFloat(savedRaw.trim());
+
+  return {
+    skipped: Number.isNaN(skipped) ? 0 : skipped,
+    saved: Number.isNaN(saved) ? 0 : saved,
+  };
+}
+
+
+test('delete flow supports cancel and removes item from dashboard and insights on confirm', async ({ page }) => {
+  await ensureProfileConfigured(page);
+  await page.goto('/insights');
+  const beforeDeleteMetrics = await readInsightsMetrics(page);
+
+  await page.goto('/items/new');
+  const title = uniqueTitle('Delete me');
+  await page.getByLabel('Title *').fill(title);
+  await page.getByLabel('Price').fill('99.50');
+  await page.getByLabel('Wait time').selectOption('custom');
+  await page.getByLabel('Custom hours').fill('0.0003');
+  await page.getByRole('button', { name: 'Add to waitlist' }).click();
+
+  const readyRow = await waitForItemStatus(page, title, 'Ready to buy');
+  await readyRow.getByRole('button', { name: 'Mark as skipped' }).click();
+
+  const row = page.locator('li.list-group-item').filter({ hasText: title }).first();
+  await expect(row.locator('.badge').first()).toHaveText('Skipped');
+
+  page.once('dialog', async (dialog) => {
+    expect(dialog.message()).toContain('Delete this item permanently?');
+    await dialog.dismiss();
+  });
+  await row.getByRole('button', { name: 'Delete' }).click();
+  await expect(row).toBeVisible();
+
+  page.once('dialog', async (dialog) => {
+    expect(dialog.message()).toContain('Delete this item permanently?');
+    await dialog.accept();
+  });
+  await row.getByRole('button', { name: 'Delete' }).click();
+  await expect(page.locator('li.list-group-item').filter({ hasText: title })).toHaveCount(0);
+
+  await page.goto('/insights');
+  const afterDeleteMetrics = await readInsightsMetrics(page);
+  expect(afterDeleteMetrics.skipped).toBe(beforeDeleteMetrics.skipped);
+  expect(afterDeleteMetrics.saved).toBeCloseTo(beforeDeleteMetrics.saved, 2);
+});
+
 async function waitForItemStatus(page: Page, title: string, status: string) {
   const itemRow = page.locator('li.list-group-item').filter({ hasText: title }).first();
 
