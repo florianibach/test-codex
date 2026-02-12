@@ -18,40 +18,43 @@
       <span class="badge text-bg-secondary">{{len .Items}} / {{.TotalItems}} items</span>
     </div>
 
-    <form method="get" action="/" class="row g-2 mb-3">
-      <div class="col-12 col-md-4">
-        <label for="q" class="form-label">Search</label>
-        <input id="q" name="q" class="form-control" value="{{.SearchQuery}}" placeholder="Title, note, link, tags" />
-      </div>
-      <div class="col-6 col-md-3">
-        <label for="status" class="form-label">Status</label>
-        <select id="status" name="status" class="form-select">
-          <option value="" {{if eq .StatusFilter ""}}selected{{end}}>All</option>
-          <option value="Waiting" {{if eq .StatusFilter "Waiting"}}selected{{end}}>Waiting</option>
-          <option value="Ready to buy" {{if eq .StatusFilter "Ready to buy"}}selected{{end}}>Ready to buy</option>
-          <option value="Bought" {{if eq .StatusFilter "Bought"}}selected{{end}}>Bought</option>
-          <option value="Skipped" {{if eq .StatusFilter "Skipped"}}selected{{end}}>Skipped</option>
-        </select>
-      </div>
-      <div class="col-6 col-md-2">
-        <label for="tag" class="form-label">Tag</label>
-        <input id="tag" name="tag" class="form-control" value="{{.TagFilter}}" placeholder="e.g. tech" />
-      </div>
-      <div class="col-12 col-md-3">
-        <label for="sort" class="form-label">Sort</label>
-        <select id="sort" name="sort" class="form-select">
-          <option value="next_ready" {{if eq .SortBy "next_ready"}}selected{{end}}>Next ready (default)</option>
-          <option value="newest" {{if eq .SortBy "newest"}}selected{{end}}>Newest first</option>
-          <option value="oldest" {{if eq .SortBy "oldest"}}selected{{end}}>Oldest first</option>
-          <option value="price_asc" {{if eq .SortBy "price_asc"}}selected{{end}}>Price low → high</option>
-          <option value="price_desc" {{if eq .SortBy "price_desc"}}selected{{end}}>Price high → low</option>
-        </select>
-      </div>
-      <div class="col-12 d-flex gap-2">
-        <button type="submit" class="btn btn-outline-primary btn-sm">Apply</button>
-        <a href="/" class="btn btn-outline-secondary btn-sm">Reset</a>
-      </div>
-    </form>
+    <details class="mb-3" {{if .HasActiveFilter}}open{{end}}>
+      <summary class="btn btn-outline-secondary btn-sm">Search, filter & sort</summary>
+      <form method="get" action="/" class="row g-2 mt-2">
+        <div class="col-12 col-md-4">
+          <label for="q" class="form-label">Search</label>
+          <input id="q" name="q" class="form-control" value="{{.SearchQuery}}" placeholder="Title, note, link, tags" />
+        </div>
+        <div class="col-6 col-md-3">
+          <label for="status" class="form-label">Status</label>
+          <select id="status" name="status" class="form-select">
+            <option value="" {{if eq .StatusFilter ""}}selected{{end}}>All</option>
+            <option value="Waiting" {{if eq .StatusFilter "Waiting"}}selected{{end}}>Waiting</option>
+            <option value="Ready to buy" {{if eq .StatusFilter "Ready to buy"}}selected{{end}}>Ready to buy</option>
+            <option value="Bought" {{if eq .StatusFilter "Bought"}}selected{{end}}>Bought</option>
+            <option value="Skipped" {{if eq .StatusFilter "Skipped"}}selected{{end}}>Skipped</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <label for="tag" class="form-label">Tag</label>
+          <input id="tag" name="tag" class="form-control" value="{{.TagFilter}}" placeholder="e.g. tech" />
+        </div>
+        <div class="col-12 col-md-3">
+          <label for="sort" class="form-label">Sort</label>
+          <select id="sort" name="sort" class="form-select">
+            <option value="next_ready" {{if eq .SortBy "next_ready"}}selected{{end}}>Next ready (default)</option>
+            <option value="newest" {{if eq .SortBy "newest"}}selected{{end}}>Newest first</option>
+            <option value="oldest" {{if eq .SortBy "oldest"}}selected{{end}}>Oldest first</option>
+            <option value="price_asc" {{if eq .SortBy "price_asc"}}selected{{end}}>Price low → high</option>
+            <option value="price_desc" {{if eq .SortBy "price_desc"}}selected{{end}}>Price high → low</option>
+          </select>
+        </div>
+        <div class="col-12 d-flex gap-2">
+          <button type="submit" class="btn btn-outline-primary btn-sm">Apply</button>
+          <a href="/" class="btn btn-outline-secondary btn-sm">Reset</a>
+        </div>
+      </form>
+    </details>
 
     {{if not .Items}}
     <p class="text-secondary mb-0">No matching entries. Adjust filters or add your first item.</p>

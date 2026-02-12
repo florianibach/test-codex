@@ -240,6 +240,42 @@ func TestHomeDoesNotShowWorkHoursSectionWithoutPrice(t *testing.T) {
 	}
 }
 
+func TestHomeFilterPanelIsCollapsedByDefault(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "<details class=\"mb-3\"") {
+		t.Fatalf("expected filter details wrapper")
+	}
+	if strings.Contains(body, "<details class=\"mb-3\" open>") {
+		t.Fatalf("expected filter details to be collapsed by default")
+	}
+}
+
+func TestHomeFilterPanelOpensWhenFiltersAreActive(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+
+	req := httptest.NewRequest(http.MethodGet, "/?q=test", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if body := rr.Body.String(); !strings.Contains(body, "<details class=\"mb-3\" open>") {
+		t.Fatalf("expected filter details to be open when filters are active")
+	}
+}
+
 func TestHomeFiltersBySearchStatusAndTag(t *testing.T) {
 	app := NewApp()
 	seedProfile(app)

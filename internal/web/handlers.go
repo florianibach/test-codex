@@ -47,6 +47,7 @@ type homeViewData struct {
 	StatusFilter    string
 	TagFilter       string
 	SortBy          string
+	HasActiveFilter bool
 	TotalItems      int
 	HourlyWage      float64
 	HasHourlyWage   bool
@@ -898,6 +899,7 @@ func (a *App) renderHome(w http.ResponseWriter, r *http.Request, data homeViewDa
 	data.StatusFilter = strings.TrimSpace(r.URL.Query().Get("status"))
 	data.TagFilter = strings.TrimSpace(r.URL.Query().Get("tag"))
 	data.SortBy = normalizeSortBy(r.URL.Query().Get("sort"))
+	data.HasActiveFilter = data.SearchQuery != "" || data.StatusFilter != "" || data.TagFilter != "" || data.SortBy != "next_ready"
 	data.Items = filterAndSortItems(allItems, data.SearchQuery, data.StatusFilter, data.TagFilter, data.SortBy)
 	data.ContentTemplate = "index_content"
 	data.ScriptTemplate = "index_script"
