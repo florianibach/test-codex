@@ -173,12 +173,8 @@ Als Betreiber:in möchte ich die App lokal und self-hosted mit persistenter Date
 **Notizen/Offene Fragen**
 - Speicherort der SQLite-Datei in Docker-Setup verbindlich dokumentieren.
 
-## 4) Definition of Done (DoD) für jede Story
-- App lässt sich lokal starten (Docker empfohlen).
-- Unit Tests vorhanden und grün.
-- E2E Tests mit Playwright (Happy Path) vorhanden und grün.
-- Exploratory UI Checks (Playwright „explore“ Suite: Navigation/Form inputs/Console errors/4xx-5xx) vorhanden und grün.
-- README enthält „Run“ und „Test“ Schritte.
+## 4) Definition of Done (DoD)
+Die projektweite DoD ist zentral dokumentiert in `docs/dod.md` (MVP-Basis) und gilt auch für dieses Roadmap-Dokument.
 
 ## 5) R1 candidates
 - Bearbeiten/Löschen von Items.
