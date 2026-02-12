@@ -240,6 +240,100 @@ func TestHomeDoesNotShowWorkHoursSectionWithoutPrice(t *testing.T) {
 	}
 }
 
+func TestHomeFilterPanelIsCollapsedByDefault(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "<details class=\"mb-3\"") {
+		t.Fatalf("expected filter details wrapper")
+	}
+	if strings.Contains(body, "<details class=\"mb-3\" open>") {
+		t.Fatalf("expected filter details to be collapsed by default")
+	}
+}
+
+func TestHomeFilterPanelOpensWhenFiltersAreActive(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+
+	req := httptest.NewRequest(http.MethodGet, "/?q=test", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if body := rr.Body.String(); !strings.Contains(body, "<details class=\"mb-3\" open>") {
+		t.Fatalf("expected filter details to be open when filters are active")
+	}
+}
+
+func TestHomeFiltersBySearchStatusAndTag(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+
+	now := time.Now()
+	app.mu.Lock()
+	app.items = append(app.items,
+		Item{ID: 1, Title: "Laptop", Note: "Work machine", Tags: "tech", Status: "Ready to buy", CreatedAt: now.Add(-2 * time.Hour), PurchaseAllowedAt: now.Add(-1 * time.Hour)},
+		Item{ID: 2, Title: "Shoes", Note: "Running", Tags: "sport", Status: "Waiting", CreatedAt: now.Add(-1 * time.Hour), PurchaseAllowedAt: now.Add(24 * time.Hour)},
+	)
+	app.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/?q=work&status=Ready+to+buy&tag=tech", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "Laptop") {
+		t.Fatalf("expected filtered item to be present")
+	}
+	if strings.Contains(body, "Shoes") {
+		t.Fatalf("did not expect non-matching item to be present")
+	}
+}
+
+func TestHomeSortsByPriceAscending(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+
+	now := time.Now()
+	app.mu.Lock()
+	app.items = append(app.items,
+		Item{ID: 1, Title: "High", Price: "100", PriceValue: 100, HasPriceValue: true, Status: "Waiting", CreatedAt: now.Add(-2 * time.Hour), PurchaseAllowedAt: now.Add(24 * time.Hour)},
+		Item{ID: 2, Title: "Low", Price: "10", PriceValue: 10, HasPriceValue: true, Status: "Waiting", CreatedAt: now.Add(-1 * time.Hour), PurchaseAllowedAt: now.Add(24 * time.Hour)},
+	)
+	app.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/?sort=price_asc", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	lowIdx := strings.Index(body, "Low")
+	highIdx := strings.Index(body, "High")
+	if lowIdx == -1 || highIdx == -1 {
+		t.Fatalf("expected both items to be present")
+	}
+	if lowIdx > highIdx {
+		t.Fatalf("expected low-priced item to appear before high-priced item")
+	}
+}
+
 func TestCreateItemValidationKeepsCustomHoursVisible(t *testing.T) {
 	app := NewApp()
 	form := url.Values{}
