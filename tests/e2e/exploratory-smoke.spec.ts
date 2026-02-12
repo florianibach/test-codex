@@ -1,6 +1,13 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 
 const uniqueTitle = (prefix: string) => `${prefix} ${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+async function ensureProfileConfigured(page: Page) {
+  await page.goto('/settings/profile');
+  await page.getByLabel('Net hourly wage').fill('25');
+  await page.getByRole('button', { name: 'Save profile' }).click();
+  await expect(page.getByText('Profile saved.')).toBeVisible();
+}
 
 test.describe('MVP mobile flow', () => {
   test.use({
@@ -14,6 +21,7 @@ test.describe('MVP mobile flow', () => {
     const maxInteractions = 3;
     const maxDurationMs = 10_000;
 
+    await ensureProfileConfigured(page);
     await page.goto('/');
     const startedAt = Date.now();
 
@@ -21,13 +29,15 @@ test.describe('MVP mobile flow', () => {
     await page.getByRole('main').getByRole('link', { name: 'Add item' }).click();
 
     interactionCount += 1;
-    await page.getByLabel('Title *').fill('Coffee grinder');
+    const title = uniqueTitle('Coffee grinder');
+    await page.getByLabel('Title *').fill(title);
 
     interactionCount += 1;
     await page.getByRole('button', { name: 'Add to waitlist' }).click();
 
-    await expect(page.getByText('Coffee grinder')).toBeVisible();
-    await expect(page.getByText('Waiting')).toBeVisible();
+    const row = page.locator('li.list-group-item').filter({ hasText: title }).first();
+    await expect(row).toBeVisible();
+    await expect(row.getByText('Waiting')).toBeVisible();
 
     const durationMs = Date.now() - startedAt;
     expect(interactionCount).toBeLessThanOrEqual(maxInteractions);
@@ -52,6 +62,7 @@ test('exploratory smoke suite: navigation, console, and HTTP errors', async ({ p
     }
   });
 
+  await ensureProfileConfigured(page);
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Waitlist dashboard' })).toBeVisible();
 
@@ -69,6 +80,7 @@ test('exploratory smoke suite: navigation, console, and HTTP errors', async ({ p
 });
 
 test('title-only add flow creates waiting item', async ({ page }) => {
+  await ensureProfileConfigured(page);
   await page.goto('/items/new');
 
   const title = uniqueTitle('Keyboard');
@@ -120,8 +132,6 @@ test('profile validates invalid hourly wage', async ({ page }) => {
   await expect(page.getByRole('alert')).toContainText('valid hourly wage');
 });
 
-
-
 test('reality check shows work hours and updates after wage change', async ({ page }) => {
   const title = uniqueTitle('Reality');
 
@@ -132,7 +142,6 @@ test('reality check shows work hours and updates after wage change', async ({ pa
 
   await page.goto('/items/new');
   await page.getByLabel('Title *').fill(title);
-  await page.locator('details summary').click();
   await page.getByLabel('Price').fill('100');
   await page.getByRole('button', { name: 'Add to waitlist' }).click();
 
@@ -149,7 +158,7 @@ test('reality check shows work hours and updates after wage change', async ({ pa
   await expect(itemRow).toContainText('Work hours: 4.0 h');
 });
 
-async function waitForItemStatus(page, title: string, status: string) {
+async function waitForItemStatus(page: Page, title: string, status: string) {
   const itemRow = page.locator('li.list-group-item').filter({ hasText: title }).first();
 
   await expect
@@ -174,6 +183,7 @@ async function waitForItemStatus(page, title: string, status: string) {
 }
 
 test('item auto-promotes to Ready to buy after wait time elapsed', async ({ page }) => {
+  await ensureProfileConfigured(page);
   await page.goto('/items/new');
 
   const title = uniqueTitle('Auto-Promotion');

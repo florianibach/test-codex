@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -51,6 +52,8 @@ func initSchema(db *sql.DB) error {
 CREATE TABLE IF NOT EXISTS profiles (
 	user_id TEXT PRIMARY KEY,
 	hourly_wage TEXT NOT NULL,
+	default_wait_preset TEXT NOT NULL DEFAULT '24h',
+	default_wait_custom_hours TEXT NOT NULL DEFAULT '',
 	ntfy_endpoint TEXT NOT NULL DEFAULT '',
 	ntfy_topic TEXT NOT NULL DEFAULT '',
 	updated_at TEXT NOT NULL
@@ -80,6 +83,13 @@ CREATE INDEX IF NOT EXISTS idx_items_status_allowed ON items(status, purchase_al
 	if err != nil {
 		return fmt.Errorf("init schema: %w", err)
 	}
+
+	if _, err := db.Exec(`ALTER TABLE profiles ADD COLUMN default_wait_preset TEXT NOT NULL DEFAULT '24h'`); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		return fmt.Errorf("migrate profiles.default_wait_preset: %w", err)
+	}
+	if _, err := db.Exec(`ALTER TABLE profiles ADD COLUMN default_wait_custom_hours TEXT NOT NULL DEFAULT ''`); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		return fmt.Errorf("migrate profiles.default_wait_custom_hours: %w", err)
+	}
 	return nil
 }
 
@@ -91,14 +101,18 @@ func (a *App) loadStateFromDB() error {
 	a.items = nil
 	a.nextID = 1
 
-	row := a.db.QueryRow(`SELECT hourly_wage, ntfy_endpoint, ntfy_topic FROM profiles WHERE user_id = ?`, defaultUserID)
-	var hourlyWage, ntfyEndpoint, ntfyTopic string
-	switch err := row.Scan(&hourlyWage, &ntfyEndpoint, &ntfyTopic); {
+	row := a.db.QueryRow(`SELECT hourly_wage, default_wait_preset, default_wait_custom_hours, ntfy_endpoint, ntfy_topic FROM profiles WHERE user_id = ?`, defaultUserID)
+	var hourlyWage, defaultPreset, defaultCustomHours, ntfyEndpoint, ntfyTopic string
+	switch err := row.Scan(&hourlyWage, &defaultPreset, &defaultCustomHours, &ntfyEndpoint, &ntfyTopic); {
 	case errors.Is(err, sql.ErrNoRows):
 	case err != nil:
 		return fmt.Errorf("load profile: %w", err)
 	default:
 		a.hourlyWage = hourlyWage
+		a.defaultWaitPreset = defaultWaitPreset(defaultPreset)
+		if a.defaultWaitPreset == "custom" {
+			a.defaultWaitCustomHours = defaultCustomHours
+		}
 		a.ntfyURL = ntfyEndpoint
 		a.ntfyTopic = ntfyTopic
 	}
@@ -170,14 +184,16 @@ func (a *App) persistProfileLocked() error {
 		return nil
 	}
 	_, err := a.db.Exec(`
-INSERT INTO profiles(user_id, hourly_wage, ntfy_endpoint, ntfy_topic, updated_at)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO profiles(user_id, hourly_wage, default_wait_preset, default_wait_custom_hours, ntfy_endpoint, ntfy_topic, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(user_id) DO UPDATE SET
 	hourly_wage = excluded.hourly_wage,
+	default_wait_preset = excluded.default_wait_preset,
+	default_wait_custom_hours = excluded.default_wait_custom_hours,
 	ntfy_endpoint = excluded.ntfy_endpoint,
 	ntfy_topic = excluded.ntfy_topic,
 	updated_at = excluded.updated_at
-`, defaultUserID, a.hourlyWage, a.ntfyURL, a.ntfyTopic, time.Now().Format(time.RFC3339Nano))
+`, defaultUserID, a.hourlyWage, defaultWaitPreset(a.defaultWaitPreset), a.defaultWaitCustomHours, a.ntfyURL, a.ntfyTopic, time.Now().Format(time.RFC3339Nano))
 	if err != nil {
 		return fmt.Errorf("persist profile: %w", err)
 	}
