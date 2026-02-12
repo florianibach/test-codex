@@ -25,6 +25,8 @@
         </select>
       </div>
 
+      <input id="timezone_offset_minutes" name="timezone_offset_minutes" type="hidden" />
+
       <div id="custom-hours-group" {{if ne .FormValues.WaitPreset "custom"}}hidden{{end}}>
         <label for="wait_custom_hours" class="form-label">Custom hours</label>
         <input id="wait_custom_hours" name="wait_custom_hours" type="number" min="0.0001" step="any" class="form-control" placeholder="e.g. 12" value="{{.FormValues.WaitCustomHours}}" {{if ne .FormValues.WaitPreset "custom"}}disabled{{end}} />
@@ -68,6 +70,7 @@
     var customHoursInput = document.getElementById("wait_custom_hours");
     var purchaseAllowedGroup = document.getElementById("purchase-allowed-group");
     var purchaseAllowedInput = document.getElementById("purchase_allowed_at");
+    var timezoneOffsetInput = document.getElementById("timezone_offset_minutes");
 
     function syncWaitInputVisibility() {
       if (!waitPreset || !customHoursGroup || !customHoursInput || !purchaseAllowedGroup || !purchaseAllowedInput) {
@@ -84,9 +87,18 @@
       purchaseAllowedInput.disabled = !isDate;
     }
 
+    function syncTimezoneOffset() {
+      if (!timezoneOffsetInput) {
+        return;
+      }
+      timezoneOffsetInput.value = String(new Date().getTimezoneOffset());
+    }
+
     if (waitPreset) {
       waitPreset.addEventListener("change", syncWaitInputVisibility);
     }
+
+    syncTimezoneOffset();
     syncWaitInputVisibility();
   })();
 </script>
