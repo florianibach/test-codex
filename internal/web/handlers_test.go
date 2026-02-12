@@ -1365,7 +1365,7 @@ func TestSnoozeItemRejectsFinalStatus(t *testing.T) {
 
 	form := url.Values{}
 	form.Set("item_id", "10")
-	form.Set("snooze_preset", "7d")
+	form.Set("snooze_preset", "24h")
 
 	req := httptest.NewRequest(http.MethodPost, "/items/snooze", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -1377,13 +1377,14 @@ func TestSnoozeItemRejectsFinalStatus(t *testing.T) {
 	}
 }
 
-func TestHomeHidesSnoozeForFinalItems(t *testing.T) {
+func TestHomeShowsSnoozeOnlyForReadyItems(t *testing.T) {
 	app := NewApp()
 	seedProfile(app)
 	app.mu.Lock()
 	app.items = append(app.items,
 		Item{ID: 1, Title: "Waiting item", Status: "Waiting", CreatedAt: time.Now(), PurchaseAllowedAt: time.Now().Add(24 * time.Hour)},
-		Item{ID: 2, Title: "Final item", Status: "Bought", CreatedAt: time.Now(), PurchaseAllowedAt: time.Now().Add(-24 * time.Hour)},
+		Item{ID: 2, Title: "Ready item", Status: "Ready to buy", CreatedAt: time.Now(), PurchaseAllowedAt: time.Now().Add(-24 * time.Hour)},
+		Item{ID: 3, Title: "Final item", Status: "Bought", CreatedAt: time.Now(), PurchaseAllowedAt: time.Now().Add(-24 * time.Hour)},
 	)
 	app.mu.Unlock()
 
@@ -1396,10 +1397,52 @@ func TestHomeHidesSnoozeForFinalItems(t *testing.T) {
 	}
 	body := rr.Body.String()
 	if !strings.Contains(body, "Snooze +24h") {
-		t.Fatalf("expected snooze controls to render for active items")
+		t.Fatalf("expected snooze controls to render for ready item")
 	}
 	if strings.Count(body, "Snooze +24h") != 1 {
-		t.Fatalf("expected snooze controls to render only once for non-final item")
+		t.Fatalf("expected snooze controls to render only once for ready item")
+	}
+}
+
+func TestSnoozeItemRejectsWaitingStatus(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+	app.mu.Lock()
+	app.items = append(app.items, Item{ID: 11, Title: "Waiting", Status: "Waiting", CreatedAt: time.Now(), PurchaseAllowedAt: time.Now().Add(time.Hour)})
+	app.mu.Unlock()
+
+	form := url.Values{}
+	form.Set("item_id", "11")
+	form.Set("snooze_preset", "24h")
+
+	req := httptest.NewRequest(http.MethodPost, "/items/snooze", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d", rr.Code)
+	}
+}
+
+func TestSnoozeItemRejectsInvalidPreset(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+	app.mu.Lock()
+	app.items = append(app.items, Item{ID: 12, Title: "Ready", Status: "Ready to buy", CreatedAt: time.Now(), PurchaseAllowedAt: time.Now().Add(-time.Hour)})
+	app.mu.Unlock()
+
+	form := url.Values{}
+	form.Set("item_id", "12")
+	form.Set("snooze_preset", "7d")
+
+	req := httptest.NewRequest(http.MethodPost, "/items/snooze", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
 	}
 }
 

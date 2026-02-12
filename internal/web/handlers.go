@@ -670,11 +670,12 @@ func (a *App) snoozeItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	snoozePreset := strings.TrimSpace(r.FormValue("snooze_preset"))
-	duration, err := parseWaitDuration(snoozePreset, "")
-	if err != nil {
+	if snoozePreset != "24h" {
 		http.Error(w, "invalid snooze preset", http.StatusBadRequest)
 		return
 	}
+
+	duration := 24 * time.Hour
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -687,8 +688,8 @@ func (a *App) snoozeItem(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		if a.items[i].Status != "Waiting" && a.items[i].Status != "Ready to buy" {
-			http.Error(w, "snooze not allowed for final items", http.StatusConflict)
+		if a.items[i].Status != "Ready to buy" {
+			http.Error(w, "snooze is only allowed for ready items", http.StatusConflict)
 			return
 		}
 
