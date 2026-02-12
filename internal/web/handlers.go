@@ -158,6 +158,7 @@ func (a *App) routes() {
 	a.mux.HandleFunc("/", a.home)
 	a.mux.HandleFunc("/items/new", a.itemForm)
 	a.mux.HandleFunc("/items/edit", a.editItemForm)
+	a.mux.HandleFunc("/items/delete", a.deleteItem)
 	a.mux.HandleFunc("/insights", a.insights)
 	a.mux.HandleFunc("/settings/profile", a.profileSettings)
 	a.mux.HandleFunc("/profile", a.legacyProfile)
@@ -604,6 +605,45 @@ func (a *App) updateItemStatus(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "could not update item status", http.StatusInternalServerError)
 			return
 		}
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	http.NotFound(w, r)
+}
+
+func (a *App) deleteItem(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	id, err := strconv.Atoi(strings.TrimSpace(r.FormValue("item_id")))
+	if err != nil || id <= 0 {
+		http.Error(w, "invalid item id", http.StatusBadRequest)
+		return
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	for i := range a.items {
+		if a.items[i].ID != id {
+			continue
+		}
+
+		a.items = append(a.items[:i], a.items[i+1:]...)
+		if err := a.deleteItemLocked(id); err != nil {
+			log.Printf("db error while deleting item: %v", err)
+			http.Error(w, "could not delete item", http.StatusInternalServerError)
+			return
+		}
+
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
