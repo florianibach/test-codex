@@ -20,7 +20,7 @@
       </article>
       <article class="metric-card">
         <p class="text-secondary small mb-1">Saved total</p>
-        <p class="h3 mb-0">{{printf "%.2f" .SavedAmount}}</p>
+        <p class="h3 mb-0">{{formatMoney .SavedAmount .Currency}}</p>
       </article>
     </div>
     {{end}}
@@ -90,7 +90,7 @@
           {{range .SavedTrend}}
           <tr>
             <td>{{.Month}}</td>
-            <td>{{printf "%.2f" .Amount}}</td>
+            <td>{{formatMoney .Amount $.Currency}}</td>
           </tr>
           {{end}}
         </tbody>

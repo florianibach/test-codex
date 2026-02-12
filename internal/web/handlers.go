@@ -51,6 +51,7 @@ type homeViewData struct {
 	TotalItems      int
 	HourlyWage      float64
 	HasHourlyWage   bool
+	Currency        string
 }
 
 type insightsViewData struct {
@@ -65,6 +66,7 @@ type insightsViewData struct {
 	DecisionTrend   []monthlyDecisionTrend
 	SavedTrend      []monthlySavedAmount
 	CategoryRatios  []categorySkipRatio
+	Currency        string
 }
 
 type categoryCount struct {
@@ -103,6 +105,7 @@ type itemFormViewData struct {
 	FormValues           Item
 	PurchaseAllowedInput string
 	Error                string
+	Currency             string
 }
 
 type profileViewData struct {
@@ -115,6 +118,7 @@ type profileViewData struct {
 	DefaultWaitCustomHours string
 	NtfyEndpoint           string
 	NtfyTopic              string
+	Currency               string
 	ProfileError           string
 	ProfileFeedback        string
 }
@@ -137,6 +141,7 @@ type App struct {
 	defaultWaitCustomHours string
 	ntfyURL                string
 	ntfyTopic              string
+	currency               string
 	dashboardURL           string
 	nextID                 int
 }
@@ -168,6 +173,7 @@ func newAppWithDB(db *sql.DB) (*App, error) {
 		"statusBadgeClass":   statusBadgeClass,
 		"workHoursAvailable": workHoursAvailable,
 		"formatWorkHours":    formatWorkHours,
+		"formatMoney":        formatMoney,
 		"mul100":             mul100,
 	}).ParseFS(embeddedFiles, "templates/*.html"))
 	mux := http.NewServeMux()
@@ -523,6 +529,7 @@ func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 	defaultCustomHours := strings.TrimSpace(r.FormValue("default_wait_custom_hours"))
 	ntfyURL := strings.TrimRight(strings.TrimSpace(r.FormValue("ntfy_endpoint")), "/")
 	ntfyTopic := strings.TrimSpace(r.FormValue("ntfy_topic"))
+	currency := normalizeCurrency(r.FormValue("currency"))
 
 	if _, err := parseHourlyWage(hourlyWage); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -534,6 +541,7 @@ func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 			DefaultWaitCustomHours: defaultCustomHours,
 			NtfyEndpoint:           ntfyURL,
 			NtfyTopic:              ntfyTopic,
+			Currency:               currency,
 			ProfileError:           err.Error(),
 		})
 		return
@@ -549,6 +557,7 @@ func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 			DefaultWaitCustomHours: defaultCustomHours,
 			NtfyEndpoint:           ntfyURL,
 			NtfyTopic:              ntfyTopic,
+			Currency:               currency,
 			ProfileError:           err.Error(),
 		})
 		return
@@ -564,6 +573,7 @@ func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 			DefaultWaitCustomHours: defaultCustomHours,
 			NtfyEndpoint:           ntfyURL,
 			NtfyTopic:              ntfyTopic,
+			Currency:               currency,
 			ProfileError:           "Please provide both ntfy endpoint and topic, or leave both empty.",
 		})
 		return
@@ -579,6 +589,7 @@ func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	a.ntfyURL = ntfyURL
 	a.ntfyTopic = ntfyTopic
+	a.currency = currency
 	if err := a.persistProfileLocked(); err != nil {
 		a.mu.Unlock()
 		log.Printf("db error while saving profile: %v", err)
@@ -913,6 +924,7 @@ func (a *App) renderHome(w http.ResponseWriter, r *http.Request, data homeViewDa
 	a.promoteReadyItemsLocked(time.Now())
 	allItems := append([]Item(nil), a.items...)
 	data.TotalItems = len(allItems)
+	data.Currency = profileCurrencyOrDefault(a.currency)
 	if parsedWage, err := parseHourlyWage(a.hourlyWage); err == nil {
 		data.HourlyWage = parsedWage
 		data.HasHourlyWage = true
@@ -938,6 +950,7 @@ func (a *App) renderInsights(w http.ResponseWriter, data insightsViewData) {
 	data.DecisionTrend = buildMonthlyDecisionTrend(a.items)
 	data.SavedTrend = buildMonthlySavedTrend(a.items)
 	data.CategoryRatios = buildCategorySkipRatios(a.items)
+	data.Currency = profileCurrencyOrDefault(a.currency)
 	a.mu.Unlock()
 
 	data.ContentTemplate = "insights_content"
@@ -948,6 +961,7 @@ func (a *App) renderItemForm(w http.ResponseWriter, data itemFormViewData) {
 	a.mu.Lock()
 	a.promoteReadyItemsLocked(time.Now())
 	data.Items = append([]Item(nil), a.items...)
+	data.Currency = profileCurrencyOrDefault(a.currency)
 	a.mu.Unlock()
 
 	if data.FormValues.WaitPreset == "" {
@@ -988,6 +1002,9 @@ func (a *App) renderProfile(w http.ResponseWriter, data profileViewData) {
 	}
 	if data.NtfyTopic == "" {
 		data.NtfyTopic = a.ntfyTopic
+	}
+	if data.Currency == "" {
+		data.Currency = profileCurrencyOrDefault(a.currency)
 	}
 	if data.DefaultWaitPreset == "" {
 		data.DefaultWaitPreset = defaultWaitPreset(a.defaultWaitPreset)
@@ -1102,6 +1119,22 @@ func formatWorkHours(item Item, hourlyWage float64) string {
 	hours := price / hourlyWage
 	roundedHours := math.Round(hours*10) / 10
 	return fmt.Sprintf("%.1f", roundedHours)
+}
+
+func normalizeCurrency(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "€"
+	}
+	return trimmed
+}
+
+func profileCurrencyOrDefault(raw string) string {
+	return normalizeCurrency(raw)
+}
+
+func formatMoney(amount float64, currency string) string {
+	return fmt.Sprintf("%s %.2f", profileCurrencyOrDefault(currency), amount)
 }
 
 func buildDashboardStats(items []Item) (skippedCount int, savedAmount float64, topCategories []categoryCount) {

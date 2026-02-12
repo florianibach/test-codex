@@ -532,3 +532,35 @@ test('item auto-promotes to Ready to buy after wait time elapsed', async ({ page
   await expect(itemRow.getByRole('button', { name: 'Mark as bought' })).toBeVisible();
   await expect(itemRow.getByRole('button', { name: 'Mark as skipped' })).toBeVisible();
 });
+
+test('R1-008 currency from profile is used in forms, list and insights with euro fallback', async ({ page }) => {
+  await ensureProfileConfigured(page);
+
+  await page.goto('/settings/profile');
+  await page.getByLabel('Currency').fill('CHF');
+  await page.getByRole('button', { name: 'Save profile' }).click();
+  await expect(page.getByText('Profile saved.')).toBeVisible();
+
+  await page.goto('/items/new');
+  await expect(page.getByText('Currency: CHF')).toBeVisible();
+
+  const title = uniqueTitle('R1-008 currency');
+  await page.getByLabel('Title *').fill(title);
+  await page.getByLabel('Price').fill('88.50');
+  await page.getByLabel('Wait time').selectOption('custom');
+  await page.getByLabel('Custom hours').fill('0.002');
+  await page.getByRole('button', { name: 'Add to waitlist' }).click();
+
+  const readyRow = await waitForItemStatus(page, title, 'Ready to buy');
+  await expect(readyRow).toContainText('CHF 88.50');
+  await readyRow.getByRole('button', { name: 'Mark as skipped' }).click();
+
+  await page.goto('/insights');
+  await expect(page.locator('article.metric-card').filter({ hasText: 'Saved total' }).locator('p.h3')).toContainText('CHF');
+
+  await page.goto('/settings/profile');
+  await page.getByLabel('Currency').fill('');
+  await page.getByRole('button', { name: 'Save profile' }).click();
+  await expect(page.getByText('Profile saved.')).toBeVisible();
+  await expect(page.getByLabel('Currency')).toHaveValue('€');
+});

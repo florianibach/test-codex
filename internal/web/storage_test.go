@@ -20,6 +20,7 @@ func TestNewAppWithSQLiteCreatesSchemaAndPersistsData(t *testing.T) {
 	profileForm := url.Values{}
 	profileForm.Set("hourly_wage", "35")
 	profileForm.Set("default_wait_preset", "7d")
+	profileForm.Set("currency", "EUR")
 	profileReq := httptest.NewRequest(http.MethodPost, "/settings/profile", strings.NewReader(profileForm.Encode()))
 	profileReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	profileRR := httptest.NewRecorder()

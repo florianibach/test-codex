@@ -52,6 +52,7 @@ func initSchema(db *sql.DB) error {
 CREATE TABLE IF NOT EXISTS profiles (
 	user_id TEXT PRIMARY KEY,
 	hourly_wage TEXT NOT NULL,
+	currency TEXT NOT NULL DEFAULT '€',
 	default_wait_preset TEXT NOT NULL DEFAULT '24h',
 	default_wait_custom_hours TEXT NOT NULL DEFAULT '',
 	ntfy_endpoint TEXT NOT NULL DEFAULT '',
@@ -87,6 +88,9 @@ CREATE INDEX IF NOT EXISTS idx_items_status_allowed ON items(status, purchase_al
 	if _, err := db.Exec(`ALTER TABLE profiles ADD COLUMN default_wait_preset TEXT NOT NULL DEFAULT '24h'`); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
 		return fmt.Errorf("migrate profiles.default_wait_preset: %w", err)
 	}
+	if _, err := db.Exec(`ALTER TABLE profiles ADD COLUMN currency TEXT NOT NULL DEFAULT '€'`); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		return fmt.Errorf("migrate profiles.currency: %w", err)
+	}
 	if _, err := db.Exec(`ALTER TABLE profiles ADD COLUMN default_wait_custom_hours TEXT NOT NULL DEFAULT ''`); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
 		return fmt.Errorf("migrate profiles.default_wait_custom_hours: %w", err)
 	}
@@ -101,14 +105,15 @@ func (a *App) loadStateFromDB() error {
 	a.items = nil
 	a.nextID = 1
 
-	row := a.db.QueryRow(`SELECT hourly_wage, default_wait_preset, default_wait_custom_hours, ntfy_endpoint, ntfy_topic FROM profiles WHERE user_id = ?`, defaultUserID)
-	var hourlyWage, defaultPreset, defaultCustomHours, ntfyEndpoint, ntfyTopic string
-	switch err := row.Scan(&hourlyWage, &defaultPreset, &defaultCustomHours, &ntfyEndpoint, &ntfyTopic); {
+	row := a.db.QueryRow(`SELECT hourly_wage, currency, default_wait_preset, default_wait_custom_hours, ntfy_endpoint, ntfy_topic FROM profiles WHERE user_id = ?`, defaultUserID)
+	var hourlyWage, currency, defaultPreset, defaultCustomHours, ntfyEndpoint, ntfyTopic string
+	switch err := row.Scan(&hourlyWage, &currency, &defaultPreset, &defaultCustomHours, &ntfyEndpoint, &ntfyTopic); {
 	case errors.Is(err, sql.ErrNoRows):
 	case err != nil:
 		return fmt.Errorf("load profile: %w", err)
 	default:
 		a.hourlyWage = hourlyWage
+		a.currency = normalizeCurrency(currency)
 		a.defaultWaitPreset = defaultWaitPreset(defaultPreset)
 		if a.defaultWaitPreset == "custom" {
 			a.defaultWaitCustomHours = defaultCustomHours
@@ -184,16 +189,17 @@ func (a *App) persistProfileLocked() error {
 		return nil
 	}
 	_, err := a.db.Exec(`
-INSERT INTO profiles(user_id, hourly_wage, default_wait_preset, default_wait_custom_hours, ntfy_endpoint, ntfy_topic, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO profiles(user_id, hourly_wage, currency, default_wait_preset, default_wait_custom_hours, ntfy_endpoint, ntfy_topic, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(user_id) DO UPDATE SET
 	hourly_wage = excluded.hourly_wage,
+	currency = excluded.currency,
 	default_wait_preset = excluded.default_wait_preset,
 	default_wait_custom_hours = excluded.default_wait_custom_hours,
 	ntfy_endpoint = excluded.ntfy_endpoint,
 	ntfy_topic = excluded.ntfy_topic,
 	updated_at = excluded.updated_at
-`, defaultUserID, a.hourlyWage, defaultWaitPreset(a.defaultWaitPreset), a.defaultWaitCustomHours, a.ntfyURL, a.ntfyTopic, time.Now().Format(time.RFC3339Nano))
+`, defaultUserID, a.hourlyWage, normalizeCurrency(a.currency), defaultWaitPreset(a.defaultWaitPreset), a.defaultWaitCustomHours, a.ntfyURL, a.ntfyTopic, time.Now().Format(time.RFC3339Nano))
 	if err != nil {
 		return fmt.Errorf("persist profile: %w", err)
 	}
