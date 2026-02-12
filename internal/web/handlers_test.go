@@ -1318,6 +1318,145 @@ func TestDeleteItemRemovesItFromHomeAndInsights(t *testing.T) {
 	}
 }
 
+func TestSnoozeItemMovesReadyToBuyBackToWaiting(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+	start := time.Now().Add(-2 * time.Hour)
+
+	app.mu.Lock()
+	app.items = append(app.items, Item{
+		ID:                9,
+		Title:             "Tablet",
+		Status:            "Ready to buy",
+		CreatedAt:         start,
+		PurchaseAllowedAt: start,
+	})
+	app.mu.Unlock()
+
+	form := url.Values{}
+	form.Set("item_id", "9")
+	form.Set("snooze_preset", "24h")
+
+	req := httptest.NewRequest(http.MethodPost, "/items/snooze", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", rr.Code)
+	}
+
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if app.items[0].Status != "Waiting" {
+		t.Fatalf("expected status Waiting after snooze, got %q", app.items[0].Status)
+	}
+	if !app.items[0].PurchaseAllowedAt.After(time.Now().Add(23 * time.Hour)) {
+		t.Fatalf("expected purchase allowed timestamp to be pushed into future")
+	}
+}
+
+func TestSnoozeItemRejectsFinalStatus(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+	app.mu.Lock()
+	app.items = append(app.items, Item{ID: 10, Title: "Final", Status: "Skipped", CreatedAt: time.Now(), PurchaseAllowedAt: time.Now().Add(-time.Hour)})
+	app.mu.Unlock()
+
+	form := url.Values{}
+	form.Set("item_id", "10")
+	form.Set("snooze_preset", "24h")
+
+	req := httptest.NewRequest(http.MethodPost, "/items/snooze", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d", rr.Code)
+	}
+}
+
+func TestHomeShowsSnoozeOnlyForReadyItems(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+	app.mu.Lock()
+	app.items = append(app.items,
+		Item{ID: 1, Title: "Waiting item", Status: "Waiting", CreatedAt: time.Now(), PurchaseAllowedAt: time.Now().Add(24 * time.Hour)},
+		Item{ID: 2, Title: "Ready item", Status: "Ready to buy", CreatedAt: time.Now(), PurchaseAllowedAt: time.Now().Add(-24 * time.Hour)},
+		Item{ID: 3, Title: "Final item", Status: "Bought", CreatedAt: time.Now(), PurchaseAllowedAt: time.Now().Add(-24 * time.Hour)},
+	)
+	app.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "Snooze +24h") {
+		t.Fatalf("expected snooze controls to render for ready item")
+	}
+	if strings.Count(body, "Snooze +24h") != 1 {
+		t.Fatalf("expected snooze controls to render only once for ready item")
+	}
+}
+
+func TestSnoozeItemRejectsWaitingStatus(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+	app.mu.Lock()
+	app.items = append(app.items, Item{ID: 11, Title: "Waiting", Status: "Waiting", CreatedAt: time.Now(), PurchaseAllowedAt: time.Now().Add(time.Hour)})
+	app.mu.Unlock()
+
+	form := url.Values{}
+	form.Set("item_id", "11")
+	form.Set("snooze_preset", "24h")
+
+	req := httptest.NewRequest(http.MethodPost, "/items/snooze", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d", rr.Code)
+	}
+}
+
+func TestSnoozeItemRejectsInvalidPreset(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+	app.mu.Lock()
+	app.items = append(app.items, Item{ID: 12, Title: "Ready", Status: "Ready to buy", CreatedAt: time.Now(), PurchaseAllowedAt: time.Now().Add(-time.Hour)})
+	app.mu.Unlock()
+
+	form := url.Values{}
+	form.Set("item_id", "12")
+	form.Set("snooze_preset", "7d")
+
+	req := httptest.NewRequest(http.MethodPost, "/items/snooze", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+}
+
+func TestSnoozeRequiresPost(t *testing.T) {
+	app := NewApp()
+	req := httptest.NewRequest(http.MethodGet, "/items/snooze", nil)
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", rr.Code)
+	}
+}
 func TestDeleteItemRequiresPost(t *testing.T) {
 	app := NewApp()
 	req := httptest.NewRequest(http.MethodGet, "/items/delete", nil)

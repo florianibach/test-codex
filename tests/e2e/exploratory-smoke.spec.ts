@@ -231,6 +231,39 @@ test('editing a skipped item with future wait time reopens it as waiting', async
 });
 
 
+
+test('snooze +24h is only available for ready items and immediately moves the item back to waiting', async ({ page }) => {
+  await ensureProfileConfigured(page);
+  await page.goto('/items/new');
+
+  const title = uniqueTitle('Snooze');
+  await page.getByLabel('Wait time').selectOption('custom');
+  await page.getByLabel('Custom hours').fill('0.0003');
+  await page.getByLabel('Title *').fill(title);
+  await page.getByRole('button', { name: 'Add to waitlist' }).click();
+
+  const readyRow = await waitForItemStatus(page, title, 'Ready to buy');
+  await expect(readyRow.getByRole('button', { name: 'Snooze +24h' })).toBeVisible();
+
+  const buyAfterBeforeRaw = await readyRow.locator('time.purchase-allowed-at').getAttribute('datetime');
+  expect(buyAfterBeforeRaw).not.toBeNull();
+
+  await readyRow.getByRole('button', { name: 'Snooze +24h' }).click();
+
+  const waitingRow = page.locator('li.list-group-item').filter({ hasText: title }).first();
+  await expect(waitingRow.getByText('Waiting')).toBeVisible();
+  await expect(waitingRow.getByRole('button', { name: 'Snooze +24h' })).toHaveCount(0);
+  await expect(waitingRow.getByRole('button', { name: 'Mark as bought' })).toHaveCount(0);
+  await expect(waitingRow.getByRole('button', { name: 'Mark as skipped' })).toHaveCount(0);
+
+  const buyAfterAfterRaw = await waitingRow.locator('time.purchase-allowed-at').getAttribute('datetime');
+  expect(buyAfterAfterRaw).not.toBeNull();
+
+  const buyAfterBefore = new Date(buyAfterBeforeRaw as string);
+  const buyAfterAfter = new Date(buyAfterAfterRaw as string);
+  expect(buyAfterAfter.getTime()).toBeGreaterThan(buyAfterBefore.getTime() + 23 * 60 * 60 * 1000);
+});
+
 async function readInsightsMetrics(page: Page) {
   const metricsSection = page.locator('section.card').filter({ hasText: /Skipped items|No data yet\./ }).first();
   const metricCards = metricsSection.locator('article.metric-card');
