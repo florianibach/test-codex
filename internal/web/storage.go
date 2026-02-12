@@ -241,6 +241,37 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	return nil
 }
 
+func (a *App) updateItemLocked(item Item) error {
+	if a.db == nil {
+		return nil
+	}
+
+	_, err := a.db.Exec(`
+UPDATE items
+SET title = ?, price = ?, price_value = ?, has_price_value = ?, link = ?, note = ?, tags = ?, status = ?, wait_preset = ?, wait_custom_hours = ?, purchase_allowed_at = ?, ntfy_attempted = ?
+WHERE id = ? AND user_id = ?
+`,
+		item.Title,
+		item.Price,
+		item.PriceValue,
+		boolToInt(item.HasPriceValue),
+		item.Link,
+		item.Note,
+		item.Tags,
+		item.Status,
+		item.WaitPreset,
+		item.WaitCustomHours,
+		item.PurchaseAllowedAt.Format(time.RFC3339Nano),
+		boolToInt(item.NtfyAttempted),
+		item.ID,
+		defaultUserID,
+	)
+	if err != nil {
+		return fmt.Errorf("update item: %w", err)
+	}
+	return nil
+}
+
 func (a *App) updateItemStatusLocked(itemID int, status string) error {
 	if a.db == nil {
 		return nil
