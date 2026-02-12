@@ -189,6 +189,47 @@ test('edit flow updates item and cancel keeps unchanged', async ({ page }) => {
   await expect(page.locator('li.list-group-item').filter({ hasText: `${title} canceled` })).toHaveCount(0);
 });
 
+
+
+test('specific date input is only shown when wait time is set to specific date', async ({ page }) => {
+  await ensureProfileConfigured(page);
+  await page.goto('/items/new');
+
+  const buyAfterInput = page.getByLabel('Buy after');
+  await expect(buyAfterInput).toBeHidden();
+
+  await page.getByLabel('Wait time').selectOption('date');
+  await expect(buyAfterInput).toBeVisible();
+
+  await page.getByLabel('Wait time').selectOption('custom');
+  await expect(buyAfterInput).toBeHidden();
+});
+
+test('editing a skipped item with future wait time reopens it as waiting', async ({ page }) => {
+  await ensureProfileConfigured(page);
+  await page.goto('/items/new');
+
+  const title = uniqueTitle('Skipped reopen');
+  await page.getByLabel('Wait time').selectOption('custom');
+  await page.getByLabel('Custom hours').fill('0.0003');
+  await page.getByLabel('Title *').fill(title);
+  await page.getByRole('button', { name: 'Add to waitlist' }).click();
+
+  const readyRow = await waitForItemStatus(page, title, 'Ready to buy');
+  await readyRow.getByRole('button', { name: 'Mark as skipped' }).click();
+
+  const skippedRow = page.locator('li.list-group-item').filter({ hasText: title }).first();
+  await expect(skippedRow.locator('.badge').first()).toHaveText('Skipped');
+  await skippedRow.getByRole('link', { name: 'Edit' }).click();
+
+  await page.getByLabel('Wait time').selectOption('custom');
+  await page.getByLabel('Custom hours').fill('5');
+  await page.getByRole('button', { name: 'Save changes' }).click();
+
+  const waitingRow = page.locator('li.list-group-item').filter({ hasText: title }).first();
+  await expect(waitingRow.getByText('Waiting')).toBeVisible();
+});
+
 async function waitForItemStatus(page: Page, title: string, status: string) {
   const itemRow = page.locator('li.list-group-item').filter({ hasText: title }).first();
 

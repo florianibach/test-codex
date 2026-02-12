@@ -64,17 +64,18 @@ type categoryCount struct {
 }
 
 type itemFormViewData struct {
-	Title           string
-	CurrentPath     string
-	ContentTemplate string
-	ScriptTemplate  string
-	Items           []Item
-	ItemID          int
-	FormAction      string
-	SubmitLabel     string
-	CancelHref      string
-	FormValues      Item
-	Error           string
+	Title                string
+	CurrentPath          string
+	ContentTemplate      string
+	ScriptTemplate       string
+	Items                []Item
+	ItemID               int
+	FormAction           string
+	SubmitLabel          string
+	CancelHref           string
+	FormValues           Item
+	PurchaseAllowedInput string
+	Error                string
 }
 
 type profileViewData struct {
@@ -294,22 +295,25 @@ func (a *App) createItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	waitDuration, err := parseWaitDuration(item.WaitPreset, item.WaitCustomHours)
+	now := time.Now()
+	purchaseAllowedInput := strings.TrimSpace(r.FormValue("purchase_allowed_at"))
+	purchaseAllowedAt, err := resolvePurchaseAllowedAt(item.WaitPreset, item.WaitCustomHours, purchaseAllowedInput, now)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		a.renderItemForm(w, itemFormViewData{
-			Title:       "Add item",
-			CurrentPath: "/items/new",
-			FormValues:  item,
-			Error:       err.Error(),
+			Title:                "Add item",
+			CurrentPath:          "/items/new",
+			FormValues:           item,
+			PurchaseAllowedInput: purchaseAllowedInput,
+			Error:                err.Error(),
 		})
 		return
 	}
 
-	item.Status = "Waiting"
-	item.WaitPreset = defaultWaitPreset(item.WaitPreset)
-	item.CreatedAt = time.Now()
-	item.PurchaseAllowedAt = item.CreatedAt.Add(waitDuration)
+	item.Status = activeStatusForPurchaseAllowedAt(purchaseAllowedAt, now)
+	item.WaitPreset = normalizeItemWaitPreset(item.WaitPreset)
+	item.CreatedAt = now
+	item.PurchaseAllowedAt = purchaseAllowedAt
 
 	a.mu.Lock()
 	if err := a.insertItemLocked(&item); err != nil {
@@ -393,35 +397,22 @@ func (a *App) updateItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	waitDuration, err := parseWaitDuration(item.WaitPreset, item.WaitCustomHours)
+	now := time.Now()
+	purchaseAllowedInput := strings.TrimSpace(r.FormValue("purchase_allowed_at"))
+	purchaseAllowedAt, err := resolvePurchaseAllowedAt(item.WaitPreset, item.WaitCustomHours, purchaseAllowedInput, now)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		a.renderEditItemForm(w, r, itemFormViewData{
-			Title:       "Edit item",
-			CurrentPath: "/",
-			FormValues:  item,
-			Error:       err.Error(),
+			Title:                "Edit item",
+			CurrentPath:          "/",
+			FormValues:           item,
+			PurchaseAllowedInput: purchaseAllowedInput,
+			Error:                err.Error(),
 		})
 		return
 	}
 
-	item.WaitPreset = defaultWaitPreset(item.WaitPreset)
-
-	var purchaseAllowedAtOverride *time.Time
-	if raw := strings.TrimSpace(r.FormValue("purchase_allowed_at")); raw != "" {
-		parsed, parseErr := time.Parse("2006-01-02T15:04", raw)
-		if parseErr != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			a.renderEditItemForm(w, r, itemFormViewData{
-				Title:       "Edit item",
-				CurrentPath: "/",
-				FormValues:  item,
-				Error:       "Please enter a valid buy-after date and time.",
-			})
-			return
-		}
-		purchaseAllowedAtOverride = &parsed
-	}
+	item.WaitPreset = normalizeItemWaitPreset(item.WaitPreset)
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -435,19 +426,13 @@ func (a *App) updateItem(w http.ResponseWriter, r *http.Request) {
 		item.CreatedAt = existing.CreatedAt
 		item.NtfyAttempted = existing.NtfyAttempted
 
-		purchaseAllowedAt := time.Now().Add(waitDuration)
-		if purchaseAllowedAtOverride != nil {
-			purchaseAllowedAt = *purchaseAllowedAtOverride
-		}
-
 		item.PurchaseAllowedAt = purchaseAllowedAt
-		item.Status = existing.Status
-		if existing.Status == "Waiting" || existing.Status == "Ready to buy" {
-			if purchaseAllowedAt.After(time.Now()) {
-				item.Status = "Waiting"
+		if existing.Status == "Bought" {
+			item.Status = "Bought"
+		} else {
+			item.Status = activeStatusForPurchaseAllowedAt(purchaseAllowedAt, now)
+			if item.Status == "Waiting" {
 				item.NtfyAttempted = false
-			} else {
-				item.Status = "Ready to buy"
 			}
 		}
 
@@ -624,6 +609,36 @@ func (a *App) updateItemStatus(w http.ResponseWriter, r *http.Request) {
 	http.NotFound(w, r)
 }
 
+func parsePurchaseAllowedAt(raw string) (time.Time, error) {
+	parsed, err := time.Parse("2006-01-02T15:04", strings.TrimSpace(raw))
+	if err != nil {
+		return time.Time{}, errors.New("Please enter a valid buy-after date and time.")
+	}
+	return parsed, nil
+}
+
+func resolvePurchaseAllowedAt(waitPreset string, waitCustomHours string, purchaseAllowedRaw string, now time.Time) (time.Time, error) {
+	if normalizeItemWaitPreset(waitPreset) == "date" {
+		if strings.TrimSpace(purchaseAllowedRaw) == "" {
+			return time.Time{}, errors.New("Please enter a buy-after date and time.")
+		}
+		return parsePurchaseAllowedAt(purchaseAllowedRaw)
+	}
+
+	waitDuration, err := parseWaitDuration(waitPreset, waitCustomHours)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return now.Add(waitDuration), nil
+}
+
+func activeStatusForPurchaseAllowedAt(purchaseAllowedAt, now time.Time) string {
+	if purchaseAllowedAt.After(now) {
+		return "Waiting"
+	}
+	return "Ready to buy"
+}
+
 func parseWaitDuration(waitPreset string, waitCustomHours string) (time.Duration, error) {
 	preset := strings.TrimSpace(waitPreset)
 	if preset == "" {
@@ -648,13 +663,17 @@ func parseWaitDuration(waitPreset string, waitCustomHours string) (time.Duration
 	}
 }
 
-func defaultWaitPreset(raw string) string {
+func normalizeItemWaitPreset(raw string) string {
 	switch strings.TrimSpace(raw) {
-	case "7d", "30d", "custom":
+	case "7d", "30d", "custom", "date":
 		return strings.TrimSpace(raw)
 	default:
 		return "24h"
 	}
+}
+
+func defaultWaitPreset(raw string) string {
+	return normalizeItemWaitPreset(raw)
 }
 
 func (a *App) hasProfile() bool {
@@ -702,6 +721,10 @@ func (a *App) renderItemForm(w http.ResponseWriter, data itemFormViewData) {
 			data.FormValues.WaitCustomHours = a.defaultWaitCustomHours
 		}
 		a.mu.RUnlock()
+	}
+
+	if data.PurchaseAllowedInput == "" && !data.FormValues.PurchaseAllowedAt.IsZero() {
+		data.PurchaseAllowedInput = data.FormValues.PurchaseAllowedAt.Format("2006-01-02T15:04")
 	}
 
 	if data.FormAction == "" {

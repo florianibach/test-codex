@@ -343,6 +343,90 @@ func TestStatusUpdateFromWaitingReturnsConflict(t *testing.T) {
 	}
 }
 
+func TestCreateItemWithSpecificDateWaitPreset(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+	buyAfter := time.Now().Add(6 * time.Hour).Format("2006-01-02T15:04")
+
+	form := url.Values{}
+	form.Set("title", "Specific date item")
+	form.Set("wait_preset", "date")
+	form.Set("purchase_allowed_at", buyAfter)
+
+	req := httptest.NewRequest(http.MethodPost, "/items/new", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", rr.Code)
+	}
+
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if len(app.items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(app.items))
+	}
+	if app.items[0].WaitPreset != "date" {
+		t.Fatalf("expected wait preset date, got %q", app.items[0].WaitPreset)
+	}
+}
+
+func TestCreateItemWithSpecificDateRequiresDateInput(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+
+	form := url.Values{}
+	form.Set("title", "Specific date item")
+	form.Set("wait_preset", "date")
+
+	req := httptest.NewRequest(http.MethodPost, "/items/new", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "Please enter a buy-after date and time.") {
+		t.Fatalf("expected missing buy-after validation")
+	}
+}
+
+func TestEditSkippedItemReevaluatesToWaitingWhenWaitChangesToFuture(t *testing.T) {
+	app := NewApp()
+	now := time.Now()
+	app.mu.Lock()
+	app.items = append(app.items, Item{ID: 1, Title: "Original", Status: "Skipped", WaitPreset: "24h", PurchaseAllowedAt: now.Add(-time.Hour), CreatedAt: now, NtfyAttempted: true})
+	app.mu.Unlock()
+
+	form := url.Values{}
+	form.Set("title", "Original")
+	form.Set("wait_preset", "custom")
+	form.Set("wait_custom_hours", "5")
+
+	req := httptest.NewRequest(http.MethodPost, "/items/edit?id=1", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", rr.Code)
+	}
+
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if got := app.items[0].Status; got != "Waiting" {
+		t.Fatalf("expected status Waiting, got %q", got)
+	}
+	if app.items[0].NtfyAttempted {
+		t.Fatalf("expected ntfy attempt reset for waiting item")
+	}
+}
+
 func TestEditItemUpdatesFieldsAndStatusToWaitingWhenBuyAfterInFuture(t *testing.T) {
 	app := NewApp()
 	seedProfile(app)
@@ -424,7 +508,6 @@ func TestEditItemValidationLeavesItemUnchanged(t *testing.T) {
 	}
 }
 
-
 func TestEditItemSetsStatusToReadyToBuyWhenBuyAfterIsInPast(t *testing.T) {
 	app := NewApp()
 	now := time.Now()
@@ -434,7 +517,7 @@ func TestEditItemSetsStatusToReadyToBuyWhenBuyAfterIsInPast(t *testing.T) {
 
 	form := url.Values{}
 	form.Set("title", "Original")
-	form.Set("wait_preset", "24h")
+	form.Set("wait_preset", "date")
 	form.Set("purchase_allowed_at", now.Add(-2*time.Hour).Format("2006-01-02T15:04"))
 
 	req := httptest.NewRequest(http.MethodPost, "/items/edit?id=1", strings.NewReader(form.Encode()))
@@ -463,7 +546,7 @@ func TestEditItemInvalidBuyAfterReturnsValidationAndLeavesItemUnchanged(t *testi
 
 	form := url.Values{}
 	form.Set("title", "Changed")
-	form.Set("wait_preset", "24h")
+	form.Set("wait_preset", "date")
 	form.Set("purchase_allowed_at", "not-a-date")
 
 	req := httptest.NewRequest(http.MethodPost, "/items/edit?id=1", strings.NewReader(form.Encode()))

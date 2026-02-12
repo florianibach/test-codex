@@ -21,6 +21,7 @@
           <option value="7d" {{if eq .FormValues.WaitPreset "7d"}}selected{{end}}>7 days</option>
           <option value="30d" {{if eq .FormValues.WaitPreset "30d"}}selected{{end}}>30 days</option>
           <option value="custom" {{if eq .FormValues.WaitPreset "custom"}}selected{{end}}>Custom</option>
+          <option value="date" {{if eq .FormValues.WaitPreset "date"}}selected{{end}}>Specific date & time</option>
         </select>
       </div>
 
@@ -28,9 +29,9 @@
         <label for="wait_custom_hours" class="form-label">Custom hours</label>
         <input id="wait_custom_hours" name="wait_custom_hours" type="number" min="0.0001" step="any" class="form-control" placeholder="e.g. 12" value="{{.FormValues.WaitCustomHours}}" {{if ne .FormValues.WaitPreset "custom"}}disabled{{end}} />
       </div>
-      <div>
-        <label for="purchase_allowed_at" class="form-label">Buy after (optional override)</label>
-        <input id="purchase_allowed_at" name="purchase_allowed_at" type="datetime-local" class="form-control" value="{{if .FormValues.PurchaseAllowedAt.IsZero}}{{else}}{{.FormValues.PurchaseAllowedAt.Format "2006-01-02T15:04"}}{{end}}" />
+      <div id="purchase-allowed-group" {{if ne .FormValues.WaitPreset "date"}}hidden{{end}}>
+        <label for="purchase_allowed_at" class="form-label">Buy after</label>
+        <input id="purchase_allowed_at" name="purchase_allowed_at" type="datetime-local" class="form-control" value="{{.PurchaseAllowedInput}}" {{if ne .FormValues.WaitPreset "date"}}disabled{{end}} />
       </div>
 
       <div>
@@ -65,21 +66,28 @@
     var waitPreset = document.getElementById("wait_preset");
     var customHoursGroup = document.getElementById("custom-hours-group");
     var customHoursInput = document.getElementById("wait_custom_hours");
+    var purchaseAllowedGroup = document.getElementById("purchase-allowed-group");
+    var purchaseAllowedInput = document.getElementById("purchase_allowed_at");
 
-    function syncCustomHoursVisibility() {
-      if (!waitPreset || !customHoursGroup || !customHoursInput) {
+    function syncWaitInputVisibility() {
+      if (!waitPreset || !customHoursGroup || !customHoursInput || !purchaseAllowedGroup || !purchaseAllowedInput) {
         return;
       }
 
       var isCustom = waitPreset.value === "custom";
+      var isDate = waitPreset.value === "date";
+
       customHoursGroup.hidden = !isCustom;
       customHoursInput.disabled = !isCustom;
+
+      purchaseAllowedGroup.hidden = !isDate;
+      purchaseAllowedInput.disabled = !isDate;
     }
 
     if (waitPreset) {
-      waitPreset.addEventListener("change", syncCustomHoursVisibility);
+      waitPreset.addEventListener("change", syncWaitInputVisibility);
     }
-    syncCustomHoursVisibility();
+    syncWaitInputVisibility();
   })();
 </script>
 {{end}}
