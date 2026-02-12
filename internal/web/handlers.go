@@ -74,15 +74,17 @@ type itemFormViewData struct {
 }
 
 type profileViewData struct {
-	Title           string
-	CurrentPath     string
-	ContentTemplate string
-	ScriptTemplate  string
-	ProfileHourly   string
-	NtfyEndpoint    string
-	NtfyTopic       string
-	ProfileError    string
-	ProfileFeedback string
+	Title                  string
+	CurrentPath            string
+	ContentTemplate        string
+	ScriptTemplate         string
+	ProfileHourly          string
+	DefaultWaitPreset      string
+	DefaultWaitCustomHours string
+	NtfyEndpoint           string
+	NtfyTopic              string
+	ProfileError           string
+	ProfileFeedback        string
 }
 
 type pageData struct {
@@ -93,16 +95,18 @@ type pageData struct {
 }
 
 type App struct {
-	templates    *template.Template
-	mux          *http.ServeMux
-	db           *sql.DB
-	mu           sync.RWMutex
-	items        []Item
-	hourlyWage   string
-	ntfyURL      string
-	ntfyTopic    string
-	dashboardURL string
-	nextID       int
+	templates              *template.Template
+	mux                    *http.ServeMux
+	db                     *sql.DB
+	mu                     sync.RWMutex
+	items                  []Item
+	hourlyWage             string
+	defaultWaitPreset      string
+	defaultWaitCustomHours string
+	ntfyURL                string
+	ntfyTopic              string
+	dashboardURL           string
+	nextID                 int
 }
 
 func NewApp() *App {
@@ -198,6 +202,10 @@ func (a *App) home(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet, http.MethodHead:
+		if !a.hasProfile() {
+			http.Redirect(w, r, "/settings/profile", http.StatusSeeOther)
+			return
+		}
 		a.renderHome(w, homeViewData{Title: "Impulse Pause", CurrentPath: "/"})
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -245,6 +253,15 @@ func (a *App) createItem(w http.ResponseWriter, r *http.Request) {
 		WaitCustomHours: strings.TrimSpace(r.FormValue("wait_custom_hours")),
 	}
 
+	if item.WaitPreset == "" {
+		a.mu.RLock()
+		item.WaitPreset = defaultWaitPreset(a.defaultWaitPreset)
+		if item.WaitPreset == "custom" {
+			item.WaitCustomHours = a.defaultWaitCustomHours
+		}
+		a.mu.RUnlock()
+	}
+
 	if parsedPrice, ok := parsePrice(item.Price); ok {
 		item.PriceValue = parsedPrice
 		item.HasPriceValue = true
@@ -274,9 +291,7 @@ func (a *App) createItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	item.Status = "Waiting"
-	if item.WaitPreset == "" {
-		item.WaitPreset = "24h"
-	}
+	item.WaitPreset = defaultWaitPreset(item.WaitPreset)
 	item.CreatedAt = time.Now()
 	item.PurchaseAllowedAt = item.CreatedAt.Add(waitDuration)
 
@@ -330,17 +345,37 @@ func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	hourlyWage := strings.TrimSpace(r.FormValue("hourly_wage"))
+	defaultPreset := strings.TrimSpace(r.FormValue("default_wait_preset"))
+	defaultCustomHours := strings.TrimSpace(r.FormValue("default_wait_custom_hours"))
 	ntfyURL := strings.TrimRight(strings.TrimSpace(r.FormValue("ntfy_endpoint")), "/")
 	ntfyTopic := strings.TrimSpace(r.FormValue("ntfy_topic"))
+
 	if _, err := parseHourlyWage(hourlyWage); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		a.renderProfile(w, profileViewData{
-			Title:         "Profile settings",
-			CurrentPath:   "/settings/profile",
-			ProfileHourly: hourlyWage,
-			NtfyEndpoint:  ntfyURL,
-			NtfyTopic:     ntfyTopic,
-			ProfileError:  err.Error(),
+			Title:                  "Profile settings",
+			CurrentPath:            "/settings/profile",
+			ProfileHourly:          hourlyWage,
+			DefaultWaitPreset:      defaultPreset,
+			DefaultWaitCustomHours: defaultCustomHours,
+			NtfyEndpoint:           ntfyURL,
+			NtfyTopic:              ntfyTopic,
+			ProfileError:           err.Error(),
+		})
+		return
+	}
+
+	if _, err := parseWaitDuration(defaultPreset, defaultCustomHours); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		a.renderProfile(w, profileViewData{
+			Title:                  "Profile settings",
+			CurrentPath:            "/settings/profile",
+			ProfileHourly:          hourlyWage,
+			DefaultWaitPreset:      defaultPreset,
+			DefaultWaitCustomHours: defaultCustomHours,
+			NtfyEndpoint:           ntfyURL,
+			NtfyTopic:              ntfyTopic,
+			ProfileError:           err.Error(),
 		})
 		return
 	}
@@ -348,18 +383,26 @@ func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 	if (ntfyURL == "" && ntfyTopic != "") || (ntfyURL != "" && ntfyTopic == "") {
 		w.WriteHeader(http.StatusBadRequest)
 		a.renderProfile(w, profileViewData{
-			Title:         "Profile settings",
-			CurrentPath:   "/settings/profile",
-			ProfileHourly: hourlyWage,
-			NtfyEndpoint:  ntfyURL,
-			NtfyTopic:     ntfyTopic,
-			ProfileError:  "Please provide both ntfy endpoint and topic, or leave both empty.",
+			Title:                  "Profile settings",
+			CurrentPath:            "/settings/profile",
+			ProfileHourly:          hourlyWage,
+			DefaultWaitPreset:      defaultPreset,
+			DefaultWaitCustomHours: defaultCustomHours,
+			NtfyEndpoint:           ntfyURL,
+			NtfyTopic:              ntfyTopic,
+			ProfileError:           "Please provide both ntfy endpoint and topic, or leave both empty.",
 		})
 		return
 	}
 
 	a.mu.Lock()
 	a.hourlyWage = hourlyWage
+	a.defaultWaitPreset = defaultWaitPreset(defaultPreset)
+	if a.defaultWaitPreset == "custom" {
+		a.defaultWaitCustomHours = defaultCustomHours
+	} else {
+		a.defaultWaitCustomHours = ""
+	}
 	a.ntfyURL = ntfyURL
 	a.ntfyTopic = ntfyTopic
 	if err := a.persistProfileLocked(); err != nil {
@@ -425,11 +468,12 @@ func (a *App) updateItemStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func parseWaitDuration(waitPreset string, waitCustomHours string) (time.Duration, error) {
-	if waitPreset == "" {
-		waitPreset = "24h"
+	preset := strings.TrimSpace(waitPreset)
+	if preset == "" {
+		preset = "24h"
 	}
 
-	switch waitPreset {
+	switch preset {
 	case "24h":
 		return 24 * time.Hour, nil
 	case "7d":
@@ -445,6 +489,21 @@ func parseWaitDuration(waitPreset string, waitCustomHours string) (time.Duration
 	default:
 		return 0, errors.New("Please select a valid wait time.")
 	}
+}
+
+func defaultWaitPreset(raw string) string {
+	switch strings.TrimSpace(raw) {
+	case "7d", "30d", "custom":
+		return strings.TrimSpace(raw)
+	default:
+		return "24h"
+	}
+}
+
+func (a *App) hasProfile() bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return strings.TrimSpace(a.hourlyWage) != ""
 }
 
 func (a *App) renderHome(w http.ResponseWriter, data homeViewData) {
@@ -479,6 +538,15 @@ func (a *App) renderItemForm(w http.ResponseWriter, data itemFormViewData) {
 	data.Items = append([]Item(nil), a.items...)
 	a.mu.Unlock()
 
+	if data.FormValues.WaitPreset == "" {
+		a.mu.RLock()
+		data.FormValues.WaitPreset = defaultWaitPreset(a.defaultWaitPreset)
+		if data.FormValues.WaitPreset == "custom" {
+			data.FormValues.WaitCustomHours = a.defaultWaitCustomHours
+		}
+		a.mu.RUnlock()
+	}
+
 	data.ContentTemplate = "items_new_content"
 	data.ScriptTemplate = "items_new_script"
 	renderTemplate(w, a.templates, "layout", data)
@@ -495,9 +563,16 @@ func (a *App) renderProfile(w http.ResponseWriter, data profileViewData) {
 	if data.NtfyTopic == "" {
 		data.NtfyTopic = a.ntfyTopic
 	}
+	if data.DefaultWaitPreset == "" {
+		data.DefaultWaitPreset = defaultWaitPreset(a.defaultWaitPreset)
+	}
+	if data.DefaultWaitCustomHours == "" {
+		data.DefaultWaitCustomHours = a.defaultWaitCustomHours
+	}
 	a.mu.RUnlock()
 
 	data.ContentTemplate = "profile_content"
+	data.ScriptTemplate = "profile_script"
 	renderTemplate(w, a.templates, "layout", data)
 }
 

@@ -10,8 +10,15 @@ import (
 	"time"
 )
 
+func seedProfile(app *App) {
+	app.mu.Lock()
+	app.hourlyWage = "25"
+	app.mu.Unlock()
+}
+
 func TestHomeRoute(t *testing.T) {
 	app := NewApp()
+	seedProfile(app)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rr := httptest.NewRecorder()
 
@@ -29,6 +36,21 @@ func TestHomeRoute(t *testing.T) {
 	}
 	if strings.Contains(body, "Track how your pause decisions impact your spending habits.") {
 		t.Fatalf("did not expect insights page content on dashboard")
+	}
+}
+
+func TestHomeRedirectsToProfileWhenMissingProfile(t *testing.T) {
+	app := NewApp()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", rr.Code)
+	}
+	if got := rr.Header().Get("Location"); got != "/settings/profile" {
+		t.Fatalf("expected redirect to /settings/profile, got %q", got)
 	}
 }
 
@@ -76,6 +98,7 @@ func TestItemsNewRouteGet(t *testing.T) {
 
 func TestCreateItemWithOnlyTitle(t *testing.T) {
 	app := NewApp()
+	seedProfile(app)
 	form := url.Values{}
 	form.Set("title", "Headphones")
 
@@ -176,6 +199,9 @@ func TestHomeShowsWorkHoursWhenPriceAndHourlyWageArePresent(t *testing.T) {
 
 func TestHomeShowsNeutralWorkHoursHintWhenDataMissing(t *testing.T) {
 	app := NewApp()
+	app.mu.Lock()
+	app.hourlyWage = "foo"
+	app.mu.Unlock()
 
 	app.mu.Lock()
 	app.items = append(app.items, Item{ID: 1, Title: "Headphones", Price: "100", Status: "Waiting", PurchaseAllowedAt: time.Now().Add(24 * time.Hour)})
@@ -239,6 +265,7 @@ func TestCreateItemValidationKeepsCustomHoursVisible(t *testing.T) {
 
 func TestStatusAutomaticallyBecomesReadyToBuy(t *testing.T) {
 	app := NewApp()
+	seedProfile(app)
 
 	app.mu.Lock()
 	app.items = append(app.items, Item{
@@ -392,6 +419,7 @@ func TestLegacyProfileRouteRedirectsOnGet(t *testing.T) {
 
 func TestReadyToBuySendsSingleNtfyNotification(t *testing.T) {
 	app := NewApp()
+	seedProfile(app)
 	requestCount := 0
 	requestBody := ""
 	ntfyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -439,6 +467,7 @@ func TestReadyToBuySendsSingleNtfyNotification(t *testing.T) {
 
 func TestReadyToBuyWithoutNtfyConfigStillPromotesItem(t *testing.T) {
 	app := NewApp()
+	seedProfile(app)
 
 	app.mu.Lock()
 	app.items = append(app.items, Item{ID: 11, Title: "Notebook", Status: "Waiting", PurchaseAllowedAt: time.Now().Add(-time.Minute)})
@@ -464,6 +493,7 @@ func TestReadyToBuyWithoutNtfyConfigStillPromotesItem(t *testing.T) {
 
 func TestReadyToBuyContinuesWhenNtfyFails(t *testing.T) {
 	app := NewApp()
+	seedProfile(app)
 	requestCount := 0
 	ntfyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
@@ -811,5 +841,72 @@ func TestUnknownRoute(t *testing.T) {
 
 	if rr.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", rr.Code)
+	}
+}
+
+func TestProfilePersistsDefaultWaitSettings(t *testing.T) {
+	app := NewApp()
+	form := url.Values{}
+	form.Set("hourly_wage", "42.5")
+	form.Set("default_wait_preset", "custom")
+	form.Set("default_wait_custom_hours", "36")
+
+	req := httptest.NewRequest(http.MethodPost, "/settings/profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", rr.Code)
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/settings/profile", nil)
+	getRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(getRR, getReq)
+	body := getRR.Body.String()
+	if !strings.Contains(body, "<option value=\"custom\" selected") {
+		t.Fatalf("expected custom default wait preset selected")
+	}
+	if !strings.Contains(body, "name=\"default_wait_custom_hours\"") || !strings.Contains(body, "value=\"36\"") {
+		t.Fatalf("expected default custom hours to be visible and persisted")
+	}
+}
+
+func TestItemFormUsesConfiguredDefaultWaitPreset(t *testing.T) {
+	app := NewApp()
+	app.mu.Lock()
+	app.hourlyWage = "25"
+	app.defaultWaitPreset = "7d"
+	app.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/items/new", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if body := rr.Body.String(); !strings.Contains(body, "<option value=\"7d\" selected") {
+		t.Fatalf("expected configured default wait preset selected in add form")
+	}
+}
+
+func TestItemsNewShowsOptionalFieldsWithoutDetailsToggle(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+
+	req := httptest.NewRequest(http.MethodGet, "/items/new", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	if strings.Contains(body, "<details>") {
+		t.Fatalf("did not expect optional fields to be hidden behind details")
+	}
+	if !strings.Contains(body, "name=\"price\"") || !strings.Contains(body, "name=\"link\"") {
+		t.Fatalf("expected optional form fields to be directly visible")
 	}
 }
