@@ -297,7 +297,8 @@ func (a *App) createItem(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 	purchaseAllowedInput := strings.TrimSpace(r.FormValue("purchase_allowed_at"))
-	purchaseAllowedAt, err := resolvePurchaseAllowedAt(item.WaitPreset, item.WaitCustomHours, purchaseAllowedInput, now)
+	timezoneOffsetMinutes := strings.TrimSpace(r.FormValue("timezone_offset_minutes"))
+	purchaseAllowedAt, err := resolvePurchaseAllowedAt(item.WaitPreset, item.WaitCustomHours, purchaseAllowedInput, timezoneOffsetMinutes, now)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		a.renderItemForm(w, itemFormViewData{
@@ -399,7 +400,8 @@ func (a *App) updateItem(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 	purchaseAllowedInput := strings.TrimSpace(r.FormValue("purchase_allowed_at"))
-	purchaseAllowedAt, err := resolvePurchaseAllowedAt(item.WaitPreset, item.WaitCustomHours, purchaseAllowedInput, now)
+	timezoneOffsetMinutes := strings.TrimSpace(r.FormValue("timezone_offset_minutes"))
+	purchaseAllowedAt, err := resolvePurchaseAllowedAt(item.WaitPreset, item.WaitCustomHours, purchaseAllowedInput, timezoneOffsetMinutes, now)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		a.renderEditItemForm(w, r, itemFormViewData{
@@ -609,20 +611,29 @@ func (a *App) updateItemStatus(w http.ResponseWriter, r *http.Request) {
 	http.NotFound(w, r)
 }
 
-func parsePurchaseAllowedAt(raw string) (time.Time, error) {
-	parsed, err := time.ParseInLocation("2006-01-02T15:04", strings.TrimSpace(raw), time.Local)
+func parsePurchaseAllowedAt(raw string, timezoneOffsetMinutesRaw string) (time.Time, error) {
+	location := time.Local
+	if timezoneOffsetMinutesRaw != "" {
+		offsetMinutes, err := strconv.Atoi(timezoneOffsetMinutesRaw)
+		if err != nil {
+			return time.Time{}, errors.New("Please enter a valid buy-after date and time.")
+		}
+		location = time.FixedZone("browser", -offsetMinutes*60)
+	}
+
+	parsed, err := time.ParseInLocation("2006-01-02T15:04", strings.TrimSpace(raw), location)
 	if err != nil {
 		return time.Time{}, errors.New("Please enter a valid buy-after date and time.")
 	}
 	return parsed, nil
 }
 
-func resolvePurchaseAllowedAt(waitPreset string, waitCustomHours string, purchaseAllowedRaw string, now time.Time) (time.Time, error) {
+func resolvePurchaseAllowedAt(waitPreset string, waitCustomHours string, purchaseAllowedRaw string, timezoneOffsetMinutesRaw string, now time.Time) (time.Time, error) {
 	if normalizeItemWaitPreset(waitPreset) == "date" {
 		if strings.TrimSpace(purchaseAllowedRaw) == "" {
 			return time.Time{}, errors.New("Please enter a buy-after date and time.")
 		}
-		return parsePurchaseAllowedAt(purchaseAllowedRaw)
+		return parsePurchaseAllowedAt(purchaseAllowedRaw, strings.TrimSpace(timezoneOffsetMinutesRaw))
 	}
 
 	waitDuration, err := parseWaitDuration(waitPreset, waitCustomHours)
