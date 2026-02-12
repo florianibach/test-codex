@@ -1333,6 +1333,35 @@ func TestBuildCategorySkipRatios(t *testing.T) {
 	}
 }
 
+func TestInsightsTrendSectionsShowZeroStateWithoutDecisions(t *testing.T) {
+	app := NewApp()
+
+	app.mu.Lock()
+	app.items = append(app.items,
+		Item{ID: 1, Title: "Still waiting", Status: "Waiting", CreatedAt: time.Now(), PurchaseAllowedAt: time.Now().Add(24 * time.Hour)},
+	)
+	app.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/insights", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "No monthly decisions yet.") {
+		t.Fatalf("expected monthly decision zero state")
+	}
+	if !strings.Contains(body, "No saved-amount trend yet.") {
+		t.Fatalf("expected saved amount zero state")
+	}
+	if !strings.Contains(body, "No category ratio data yet.") {
+		t.Fatalf("expected category ratio zero state")
+	}
+}
+
 func TestInsightsPageShowsTrendSections(t *testing.T) {
 	app := NewApp()
 
