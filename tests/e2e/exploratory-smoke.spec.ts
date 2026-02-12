@@ -232,10 +232,15 @@ test('editing a skipped item with future wait time reopens it as waiting', async
 
 
 async function readInsightsMetrics(page: Page) {
-  const metricsSection = page.locator('section.card').filter({ hasText: 'Skipped items' }).first();
+  const metricsSection = page.locator('section.card').filter({ hasText: /Skipped items|No data yet\./ }).first();
+  const metricCards = metricsSection.locator('article.metric-card');
 
-  const skippedRaw = (await metricsSection.locator('article.metric-card').filter({ hasText: 'Skipped items' }).locator('p.h3').textContent()) ?? '0';
-  const savedRaw = (await metricsSection.locator('article.metric-card').filter({ hasText: 'Saved total' }).locator('p.h3').textContent()) ?? '0';
+  if ((await metricCards.count()) === 0) {
+    return { skipped: 0, saved: 0 };
+  }
+
+  const skippedRaw = (await metricCards.filter({ hasText: 'Skipped items' }).locator('p.h3').textContent()) ?? '0';
+  const savedRaw = (await metricCards.filter({ hasText: 'Saved total' }).locator('p.h3').textContent()) ?? '0';
 
   const skipped = Number.parseInt(skippedRaw.trim(), 10);
   const saved = Number.parseFloat(savedRaw.trim());
