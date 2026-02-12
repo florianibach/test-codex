@@ -281,3 +281,27 @@ summary:focus-visible {
   border-radius: 999px;
   padding: .45em .8em;
 }
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  text-align: left;
+  padding: .4rem .3rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.table thead th {
+  border-top: 0;
+  color: var(--text-secondary);
+  font-size: .8rem;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}

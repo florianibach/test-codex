@@ -43,4 +43,92 @@
     {{end}}
   </div>
 </section>
+
+<section class="card shadow-sm mt-2">
+  <div class="card-body">
+    <h2 class="h5 mb-3">Monthly decision trend</h2>
+    {{if .DecisionTrend}}
+    <div class="table-wrap" role="region" aria-label="Monthly decision trend">
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th scope="col">Month</th>
+            <th scope="col">Bought</th>
+            <th scope="col">Skipped</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .DecisionTrend}}
+          <tr>
+            <td>{{.Month}}</td>
+            <td>{{.BoughtCount}}</td>
+            <td>{{.SkippedCount}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+    {{else}}
+    <p class="text-secondary mb-0">No monthly decisions yet.</p>
+    {{end}}
+  </div>
+</section>
+
+<section class="card shadow-sm mt-2">
+  <div class="card-body">
+    <h2 class="h5 mb-3">Saved amount trend</h2>
+    {{if .SavedTrend}}
+    <div class="table-wrap" role="region" aria-label="Saved amount trend">
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th scope="col">Month</th>
+            <th scope="col">Saved</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .SavedTrend}}
+          <tr>
+            <td>{{.Month}}</td>
+            <td>{{printf "%.2f" .Amount}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+    {{else}}
+    <p class="text-secondary mb-0">No saved-amount trend yet.</p>
+    {{end}}
+  </div>
+</section>
+
+<section class="card shadow-sm mt-2">
+  <div class="card-body">
+    <h2 class="h5 mb-3">Top skip ratios by category</h2>
+    {{if .CategoryRatios}}
+    <div class="table-wrap" role="region" aria-label="Category skip ratios">
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th scope="col">Category</th>
+            <th scope="col">Skip ratio</th>
+            <th scope="col">Skipped / Decided</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .CategoryRatios}}
+          <tr>
+            <td>{{.Name}}</td>
+            <td>{{printf "%.0f%%" (mul100 .Ratio)}}</td>
+            <td>{{.SkippedCount}} / {{.DecisionCount}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+    {{else}}
+    <p class="text-secondary mb-0">No category ratio data yet.</p>
+    {{end}}
+  </div>
+</section>
 {{end}}
