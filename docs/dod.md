@@ -5,7 +5,8 @@ Diese Definition wird von den Roadmap-Dokumenten referenziert, damit sie nicht m
 
 ## Standard-DoD für jede Story
 - App lässt sich lokal starten (Docker empfohlen).
-- Unit Tests vorhanden und grün.
-- E2E-Tests mit Playwright (Happy Path) vorhanden und grün.
-- Exploratory UI Checks (Playwright „explore“ Suite: Navigation/Form inputs/Console errors/4xx-5xx) vorhanden und grün.
+- Jedes Acceptance Criterion (AC) ist durch automatisierte Tests abgedeckt (mindestens einer pro AC): Unit-, E2E- oder Smoke-Tests.
+- Alle vorhandenen automatisierten Tests sind grün.
+- Pro Feature wird zusätzlich ein „monkeyish“ Test ergänzt (zufallsnahe bzw. robustheitsorientierte Interaktionen), automatisiert und grün.
+- Neue Funktionen erreichen nach Möglichkeit ca. 80% Unit-Test-Coverage (mit Augenmaß).
 - README enthält „Run“ und „Test“ Schritte.
