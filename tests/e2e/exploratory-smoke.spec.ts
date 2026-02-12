@@ -102,6 +102,110 @@ test('dashboard search, tag filter, and price sort work together', async ({ page
 
   await expect(page.locator('details.mb-3').first()).toHaveAttribute('open', '');
 });
+
+
+test('dashboard search matches title and link fields explicitly', async ({ page }) => {
+  await ensureProfileConfigured(page);
+
+  const titleMatch = uniqueTitle('R1-004 title-match');
+  const linkMatch = uniqueTitle('r1-004-link');
+  const neutralTitle = uniqueTitle('R1-004 neutral');
+
+  await page.goto('/items/new');
+  await page.getByLabel('Title *').fill(titleMatch);
+  await page.getByLabel('Link').fill('https://example.com/no-match');
+  await page.getByRole('button', { name: 'Add to waitlist' }).click();
+
+  await page.goto('/items/new');
+  await page.getByLabel('Title *').fill(neutralTitle);
+  await page.getByLabel('Link').fill(`https://example.com/${linkMatch}`);
+  await page.getByRole('button', { name: 'Add to waitlist' }).click();
+
+  const filterPanel = page.locator('details.mb-3').first();
+  await filterPanel.locator('summary').click();
+
+  await page.getByLabel('Search').fill(titleMatch);
+  await page.getByRole('button', { name: 'Apply' }).click();
+
+  await expect(page.locator('li.list-group-item').filter({ hasText: titleMatch })).toHaveCount(1);
+  await expect(page.locator('li.list-group-item').filter({ hasText: neutralTitle })).toHaveCount(0);
+
+  await page.getByLabel('Search').fill(linkMatch);
+  await page.getByRole('button', { name: 'Apply' }).click();
+
+  await expect(page.locator('li.list-group-item').filter({ hasText: neutralTitle })).toHaveCount(1);
+  await expect(page.locator('li.list-group-item').filter({ hasText: titleMatch })).toHaveCount(0);
+});
+
+test('dashboard default sorting is next ready to buy (purchase time ascending)', async ({ page }) => {
+  await ensureProfileConfigured(page);
+
+  const earlierTitle = uniqueTitle('R1-004 earlier-ready');
+  const laterTitle = uniqueTitle('R1-004 later-ready');
+
+  await page.goto('/items/new');
+  await page.getByLabel('Title *').fill(laterTitle);
+  await page.getByLabel('Wait time').selectOption('30d');
+  await page.getByRole('button', { name: 'Add to waitlist' }).click();
+
+  await page.goto('/items/new');
+  await page.getByLabel('Title *').fill(earlierTitle);
+  await page.getByLabel('Wait time').selectOption('24h');
+  await page.getByRole('button', { name: 'Add to waitlist' }).click();
+
+  await page.goto('/');
+
+  const titles = await page.locator('li.list-group-item p.fw-semibold').allTextContents();
+  const earlierIndex = titles.findIndex((txt) => txt.includes(earlierTitle));
+  const laterIndex = titles.findIndex((txt) => txt.includes(laterTitle));
+
+  expect(earlierIndex).toBeGreaterThanOrEqual(0);
+  expect(laterIndex).toBeGreaterThanOrEqual(0);
+  expect(earlierIndex).toBeLessThan(laterIndex);
+});
+
+test('dashboard keeps combined search, status filter and sort consistent after reload', async ({ page }) => {
+  await ensureProfileConfigured(page);
+
+  const includeTitle = uniqueTitle('R1-004 include');
+  const excludeTitle = uniqueTitle('R1-004 exclude');
+  const token = uniqueTitle('r1-004-refresh-token');
+
+  await page.goto('/items/new');
+  await page.getByLabel('Title *').fill(includeTitle);
+  await page.getByLabel('Wait time').selectOption('custom');
+  await expect(page.getByLabel('Custom hours')).toBeEnabled();
+  await page.getByLabel('Custom hours').fill('0.002');
+  await page.getByLabel('Note').fill(token);
+  await page.getByRole('button', { name: 'Add to waitlist' }).click();
+
+  await page.goto('/items/new');
+  await page.getByLabel('Title *').fill(excludeTitle);
+  await page.getByLabel('Wait time').selectOption('7d');
+  await page.getByLabel('Note').fill(token);
+  await page.getByRole('button', { name: 'Add to waitlist' }).click();
+
+  const readyRow = await waitForItemStatus(page, includeTitle, 'Ready to buy');
+  await expect(readyRow).toBeVisible();
+
+  const filterPanel = page.locator('details.mb-3').first();
+  await filterPanel.locator('summary').click();
+  await page.getByLabel('Search').fill(token);
+  await page.getByLabel('Status').selectOption('Ready to buy');
+  await page.getByLabel('Sort').selectOption('newest');
+  await page.getByRole('button', { name: 'Apply' }).click();
+
+  await expect(page.locator('li.list-group-item').filter({ hasText: includeTitle })).toHaveCount(1);
+  await expect(page.locator('li.list-group-item').filter({ hasText: excludeTitle })).toHaveCount(0);
+
+  await page.reload();
+
+  await expect(page.locator('details.mb-3')).toHaveAttribute('open', '');
+  await expect(page).toHaveURL(/status=Ready\+to\+buy/);
+  await expect(page).toHaveURL(/sort=newest/);
+  await expect(page.locator('li.list-group-item').filter({ hasText: includeTitle })).toHaveCount(1);
+  await expect(page.locator('li.list-group-item').filter({ hasText: excludeTitle })).toHaveCount(0);
+});
 test('exploratory smoke suite: navigation, console, and HTTP errors', async ({ page }) => {
   const consoleErrors: string[] = [];
   const httpErrors: string[] = [];
