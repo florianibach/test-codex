@@ -1139,3 +1139,61 @@ func TestItemsNewShowsOptionalFieldsWithoutDetailsToggle(t *testing.T) {
 		t.Fatalf("expected optional form fields to be directly visible")
 	}
 }
+
+func TestDeleteItemRemovesItFromHomeAndInsights(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+	app.mu.Lock()
+	app.items = append(app.items,
+		Item{ID: 1, Title: "Keep", Status: "Skipped", Price: "12.50", HasPriceValue: true, PriceValue: 12.5, Tags: "Office", PurchaseAllowedAt: time.Now().Add(-time.Hour), CreatedAt: time.Now().Add(-48 * time.Hour)},
+		Item{ID: 2, Title: "Delete me", Status: "Skipped", Price: "100.00", HasPriceValue: true, PriceValue: 100, Tags: "Tech", PurchaseAllowedAt: time.Now().Add(-time.Hour), CreatedAt: time.Now().Add(-24 * time.Hour)},
+	)
+	app.mu.Unlock()
+
+	form := url.Values{}
+	form.Set("item_id", "2")
+	deleteReq := httptest.NewRequest(http.MethodPost, "/items/delete", strings.NewReader(form.Encode()))
+	deleteReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	deleteRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(deleteRR, deleteReq)
+
+	if deleteRR.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", deleteRR.Code)
+	}
+
+	homeReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	homeRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(homeRR, homeReq)
+	if homeRR.Code != http.StatusOK {
+		t.Fatalf("expected home 200, got %d", homeRR.Code)
+	}
+	if body := homeRR.Body.String(); strings.Contains(body, "Delete me") {
+		t.Fatalf("expected deleted item to be absent from home")
+	}
+
+	insightsReq := httptest.NewRequest(http.MethodGet, "/insights", nil)
+	insightsRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(insightsRR, insightsReq)
+	if insightsRR.Code != http.StatusOK {
+		t.Fatalf("expected insights 200, got %d", insightsRR.Code)
+	}
+	body := insightsRR.Body.String()
+	if !strings.Contains(body, ">1</p>") {
+		t.Fatalf("expected skipped count to reflect remaining item")
+	}
+	if !strings.Contains(body, ">12.50</p>") {
+		t.Fatalf("expected saved total to exclude deleted item")
+	}
+}
+
+func TestDeleteItemRequiresPost(t *testing.T) {
+	app := NewApp()
+	req := httptest.NewRequest(http.MethodGet, "/items/delete", nil)
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", rr.Code)
+	}
+}

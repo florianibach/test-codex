@@ -58,6 +58,10 @@
             </p>
             <div class="item-actions mt-2">
               <a class="btn btn-sm btn-outline-primary item-action-btn" href="/items/edit?id={{.ID}}">Edit</a>
+              <form method="post" action="/items/delete" class="item-status-form" onsubmit="return confirm('Delete this item permanently?');">
+                <input type="hidden" name="item_id" value="{{.ID}}" />
+                <button class="btn btn-sm btn-outline-danger item-action-btn" type="submit">Delete</button>
+              </form>
               {{if eq .Status "Ready to buy"}}
               <form method="post" action="/items/status" class="item-status-form">
                 <input type="hidden" name="item_id" value="{{.ID}}" />

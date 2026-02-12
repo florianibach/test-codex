@@ -272,6 +272,18 @@ WHERE id = ? AND user_id = ?
 	return nil
 }
 
+func (a *App) deleteItemLocked(itemID int) error {
+	if a.db == nil {
+		return nil
+	}
+
+	_, err := a.db.Exec(`DELETE FROM items WHERE id = ? AND user_id = ?`, itemID, defaultUserID)
+	if err != nil {
+		return fmt.Errorf("delete item: %w", err)
+	}
+	return nil
+}
+
 func (a *App) updateItemStatusLocked(itemID int, status string) error {
 	if a.db == nil {
 		return nil
