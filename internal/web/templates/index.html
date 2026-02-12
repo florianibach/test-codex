@@ -51,6 +51,14 @@
                 <input type="hidden" name="item_id" value="{{.ID}}" />
                 <button class="btn btn-sm btn-outline-danger item-action-btn" type="submit">Delete</button>
               </form>
+              {{if or (eq .Status "Waiting") (eq .Status "Ready to buy")}}
+              <form method="post" action="/items/snooze" class="item-status-form">
+                <input type="hidden" name="item_id" value="{{.ID}}" />
+                <button class="btn btn-sm btn-outline-secondary item-action-btn" type="submit" name="snooze_preset" value="24h">Snooze +24h</button>
+                <button class="btn btn-sm btn-outline-secondary item-action-btn" type="submit" name="snooze_preset" value="7d">Snooze +7d</button>
+                <button class="btn btn-sm btn-outline-secondary item-action-btn" type="submit" name="snooze_preset" value="30d">Snooze +30d</button>
+              </form>
+              {{end}}
               {{if eq .Status "Ready to buy"}}
               <form method="post" action="/items/status" class="item-status-form">
                 <input type="hidden" name="item_id" value="{{.ID}}" />
