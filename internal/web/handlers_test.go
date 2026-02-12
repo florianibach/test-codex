@@ -424,6 +424,71 @@ func TestEditItemValidationLeavesItemUnchanged(t *testing.T) {
 	}
 }
 
+
+func TestEditItemSetsStatusToReadyToBuyWhenBuyAfterIsInPast(t *testing.T) {
+	app := NewApp()
+	now := time.Now()
+	app.mu.Lock()
+	app.items = append(app.items, Item{ID: 1, Title: "Original", Status: "Waiting", WaitPreset: "24h", PurchaseAllowedAt: now.Add(24 * time.Hour), CreatedAt: now})
+	app.mu.Unlock()
+
+	form := url.Values{}
+	form.Set("title", "Original")
+	form.Set("wait_preset", "24h")
+	form.Set("purchase_allowed_at", now.Add(-2*time.Hour).Format("2006-01-02T15:04"))
+
+	req := httptest.NewRequest(http.MethodPost, "/items/edit?id=1", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", rr.Code)
+	}
+
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if got := app.items[0].Status; got != "Ready to buy" {
+		t.Fatalf("expected status Ready to buy, got %q", got)
+	}
+}
+
+func TestEditItemInvalidBuyAfterReturnsValidationAndLeavesItemUnchanged(t *testing.T) {
+	app := NewApp()
+	now := time.Now()
+	app.mu.Lock()
+	app.items = append(app.items, Item{ID: 1, Title: "Original", Status: "Waiting", WaitPreset: "24h", PurchaseAllowedAt: now.Add(24 * time.Hour), CreatedAt: now})
+	app.mu.Unlock()
+
+	form := url.Values{}
+	form.Set("title", "Changed")
+	form.Set("wait_preset", "24h")
+	form.Set("purchase_allowed_at", "not-a-date")
+
+	req := httptest.NewRequest(http.MethodPost, "/items/edit?id=1", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "Please enter a valid buy-after date and time.") {
+		t.Fatalf("expected buy-after validation error")
+	}
+
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if got := app.items[0].Title; got != "Original" {
+		t.Fatalf("expected unchanged item title, got %q", got)
+	}
+	if got := app.items[0].Status; got != "Waiting" {
+		t.Fatalf("expected unchanged status Waiting, got %q", got)
+	}
+}
+
 func TestProfileSettingsGet(t *testing.T) {
 	app := NewApp()
 	req := httptest.NewRequest(http.MethodGet, "/settings/profile", nil)
