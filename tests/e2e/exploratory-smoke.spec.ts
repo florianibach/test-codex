@@ -158,6 +158,37 @@ test('reality check shows work hours and updates after wage change', async ({ pa
   await expect(itemRow).toContainText('Work hours: 4.0 h');
 });
 
+
+test('edit flow updates item and cancel keeps unchanged', async ({ page }) => {
+  await ensureProfileConfigured(page);
+  await page.goto('/items/new');
+
+  const title = uniqueTitle('Edit me');
+  await page.getByLabel('Title *').fill(title);
+  await page.getByLabel('Note').fill('before');
+  await page.getByRole('button', { name: 'Add to waitlist' }).click();
+
+  const row = page.locator('li.list-group-item').filter({ hasText: title }).first();
+  await expect(row).toBeVisible();
+  await row.getByRole('link', { name: 'Edit' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Edit item' })).toBeVisible();
+  await page.getByLabel('Title *').fill(`${title} updated`);
+  await page.getByLabel('Note').fill('after');
+  await page.getByRole('button', { name: 'Save changes' }).click();
+
+  let updatedRow = page.locator('li.list-group-item').filter({ hasText: `${title} updated` }).first();
+  await expect(updatedRow).toContainText('after');
+
+  await updatedRow.getByRole('link', { name: 'Edit' }).click();
+  await page.getByLabel('Title *').fill(`${title} canceled`);
+  await page.getByRole('link', { name: 'Cancel' }).click();
+
+  updatedRow = page.locator('li.list-group-item').filter({ hasText: `${title} updated` }).first();
+  await expect(updatedRow).toBeVisible();
+  await expect(page.locator('li.list-group-item').filter({ hasText: `${title} canceled` })).toHaveCount(0);
+});
+
 async function waitForItemStatus(page: Page, title: string, status: string) {
   const itemRow = page.locator('li.list-group-item').filter({ hasText: title }).first();
 

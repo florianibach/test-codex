@@ -69,6 +69,10 @@ type itemFormViewData struct {
 	ContentTemplate string
 	ScriptTemplate  string
 	Items           []Item
+	ItemID          int
+	FormAction      string
+	SubmitLabel     string
+	CancelHref      string
 	FormValues      Item
 	Error           string
 }
@@ -152,6 +156,7 @@ func newAppWithDB(db *sql.DB) (*App, error) {
 func (a *App) routes() {
 	a.mux.HandleFunc("/", a.home)
 	a.mux.HandleFunc("/items/new", a.itemForm)
+	a.mux.HandleFunc("/items/edit", a.editItemForm)
 	a.mux.HandleFunc("/insights", a.insights)
 	a.mux.HandleFunc("/settings/profile", a.profileSettings)
 	a.mux.HandleFunc("/profile", a.legacyProfile)
@@ -237,6 +242,17 @@ func (a *App) itemForm(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (a *App) editItemForm(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet, http.MethodHead:
+		a.renderEditItemForm(w, r, itemFormViewData{Title: "Edit item", CurrentPath: "/"})
+	case http.MethodPost:
+		a.updateItem(w, r)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
 func (a *App) createItem(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form data", http.StatusBadRequest)
@@ -306,6 +322,147 @@ func (a *App) createItem(w http.ResponseWriter, r *http.Request) {
 	a.mu.Unlock()
 
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (a *App) renderEditItemForm(w http.ResponseWriter, r *http.Request, data itemFormViewData) {
+	id, err := strconv.Atoi(strings.TrimSpace(r.URL.Query().Get("id")))
+	if err != nil || id <= 0 {
+		http.Error(w, "invalid item id", http.StatusBadRequest)
+		return
+	}
+
+	a.mu.RLock()
+	if data.FormValues.ID == 0 {
+		for i := range a.items {
+			if a.items[i].ID == id {
+				data.FormValues = a.items[i]
+				break
+			}
+		}
+	}
+	a.mu.RUnlock()
+
+	if data.FormValues.ID == 0 {
+		http.NotFound(w, r)
+		return
+	}
+
+	data.ItemID = id
+	data.FormAction = "/items/edit?id=" + strconv.Itoa(id)
+	data.SubmitLabel = "Save changes"
+	data.CancelHref = "/"
+	a.renderItemForm(w, data)
+}
+
+func (a *App) updateItem(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	id, err := strconv.Atoi(strings.TrimSpace(r.URL.Query().Get("id")))
+	if err != nil || id <= 0 {
+		http.Error(w, "invalid item id", http.StatusBadRequest)
+		return
+	}
+
+	item := Item{
+		ID:              id,
+		Title:           strings.TrimSpace(r.FormValue("title")),
+		Price:           strings.TrimSpace(r.FormValue("price")),
+		Link:            strings.TrimSpace(r.FormValue("link")),
+		Note:            strings.TrimSpace(r.FormValue("note")),
+		Tags:            strings.TrimSpace(r.FormValue("tags")),
+		WaitPreset:      strings.TrimSpace(r.FormValue("wait_preset")),
+		WaitCustomHours: strings.TrimSpace(r.FormValue("wait_custom_hours")),
+	}
+
+	if parsedPrice, ok := parsePrice(item.Price); ok {
+		item.PriceValue = parsedPrice
+		item.HasPriceValue = true
+	}
+
+	if item.Title == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		a.renderEditItemForm(w, r, itemFormViewData{
+			Title:       "Edit item",
+			CurrentPath: "/",
+			FormValues:  item,
+			Error:       "Please enter a title.",
+		})
+		return
+	}
+
+	waitDuration, err := parseWaitDuration(item.WaitPreset, item.WaitCustomHours)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		a.renderEditItemForm(w, r, itemFormViewData{
+			Title:       "Edit item",
+			CurrentPath: "/",
+			FormValues:  item,
+			Error:       err.Error(),
+		})
+		return
+	}
+
+	item.WaitPreset = defaultWaitPreset(item.WaitPreset)
+
+	var purchaseAllowedAtOverride *time.Time
+	if raw := strings.TrimSpace(r.FormValue("purchase_allowed_at")); raw != "" {
+		parsed, parseErr := time.Parse("2006-01-02T15:04", raw)
+		if parseErr != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			a.renderEditItemForm(w, r, itemFormViewData{
+				Title:       "Edit item",
+				CurrentPath: "/",
+				FormValues:  item,
+				Error:       "Please enter a valid buy-after date and time.",
+			})
+			return
+		}
+		purchaseAllowedAtOverride = &parsed
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	for i := range a.items {
+		if a.items[i].ID != id {
+			continue
+		}
+
+		existing := a.items[i]
+		item.CreatedAt = existing.CreatedAt
+		item.NtfyAttempted = existing.NtfyAttempted
+
+		purchaseAllowedAt := time.Now().Add(waitDuration)
+		if purchaseAllowedAtOverride != nil {
+			purchaseAllowedAt = *purchaseAllowedAtOverride
+		}
+
+		item.PurchaseAllowedAt = purchaseAllowedAt
+		item.Status = existing.Status
+		if existing.Status == "Waiting" || existing.Status == "Ready to buy" {
+			if purchaseAllowedAt.After(time.Now()) {
+				item.Status = "Waiting"
+				item.NtfyAttempted = false
+			} else {
+				item.Status = "Ready to buy"
+			}
+		}
+
+		a.items[i] = item
+		if err := a.updateItemLocked(item); err != nil {
+			log.Printf("db error while updating item: %v", err)
+			http.Error(w, "could not update item", http.StatusInternalServerError)
+			return
+		}
+
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	http.NotFound(w, r)
 }
 
 func (a *App) profileSettings(w http.ResponseWriter, r *http.Request) {
@@ -545,6 +702,16 @@ func (a *App) renderItemForm(w http.ResponseWriter, data itemFormViewData) {
 			data.FormValues.WaitCustomHours = a.defaultWaitCustomHours
 		}
 		a.mu.RUnlock()
+	}
+
+	if data.FormAction == "" {
+		data.FormAction = "/items/new"
+	}
+	if data.SubmitLabel == "" {
+		data.SubmitLabel = "Add to waitlist"
+	}
+	if data.CancelHref == "" {
+		data.CancelHref = "/"
 	}
 
 	data.ContentTemplate = "items_new_content"

@@ -56,13 +56,16 @@
               Buy after:
               <time class="purchase-allowed-at" datetime="{{.PurchaseAllowedAt.UTC.Format "2006-01-02T15:04:05Z07:00"}}">{{.PurchaseAllowedAt.Format "02.01.2006 15:04"}}</time>
             </p>
-            {{if eq .Status "Ready to buy"}}
-            <form method="post" action="/items/status" class="d-flex flex-column gap-1 mt-2">
-              <input type="hidden" name="item_id" value="{{.ID}}" />
-              <button class="btn btn-sm btn-success" type="submit" name="status" value="Bought">Mark as bought</button>
-              <button class="btn btn-sm btn-outline-secondary" type="submit" name="status" value="Skipped">Mark as skipped</button>
-            </form>
-            {{end}}
+            <div class="d-flex flex-column gap-1 mt-2">
+              <a class="btn btn-sm btn-outline-primary" href="/items/edit?id={{.ID}}">Edit</a>
+              {{if eq .Status "Ready to buy"}}
+              <form method="post" action="/items/status" class="d-flex flex-column gap-1">
+                <input type="hidden" name="item_id" value="{{.ID}}" />
+                <button class="btn btn-sm btn-success" type="submit" name="status" value="Bought">Mark as bought</button>
+                <button class="btn btn-sm btn-outline-secondary" type="submit" name="status" value="Skipped">Mark as skipped</button>
+              </form>
+              {{end}}
+            </div>
           </div>
         </div>
       </li>
