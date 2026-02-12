@@ -45,6 +45,63 @@ test.describe('MVP mobile flow', () => {
   });
 });
 
+
+
+test('dashboard filter panel is collapsed by default and opens on demand', async ({ page }) => {
+  await ensureProfileConfigured(page);
+  await page.goto('/');
+
+  const filterPanel = page.locator('details.mb-3').first();
+  await expect(filterPanel).not.toHaveAttribute('open', '');
+
+  await filterPanel.locator('summary').click();
+  await expect(filterPanel).toHaveAttribute('open', '');
+});
+
+test('dashboard search, tag filter, and price sort work together', async ({ page }) => {
+  await ensureProfileConfigured(page);
+
+  const firstTitle = uniqueTitle('R1-004 First');
+  const secondTitle = uniqueTitle('R1-004 Second');
+  const searchToken = uniqueTitle('r1-004-token');
+
+  await page.goto('/items/new');
+  await page.getByLabel('Title *').fill(firstTitle);
+  await page.getByLabel('Price').fill('200');
+  await page.getByLabel('Note').fill(searchToken);
+  await page.getByLabel('Tags').fill('tech');
+  await page.getByRole('button', { name: 'Add to waitlist' }).click();
+
+  await page.goto('/items/new');
+  await page.getByLabel('Title *').fill(secondTitle);
+  await page.getByLabel('Price').fill('50');
+  await page.getByLabel('Note').fill(searchToken);
+  await page.getByLabel('Tags').fill('tech');
+  await page.getByRole('button', { name: 'Add to waitlist' }).click();
+
+  const filterPanel = page.locator('details.mb-3').first();
+  await filterPanel.locator('summary').click();
+
+  await page.getByLabel('Search').fill(searchToken);
+  await page.getByLabel('Tag').fill('tech');
+  await page.getByLabel('Sort').selectOption('price_asc');
+  await page.getByRole('button', { name: 'Apply' }).click();
+
+  await expect(page).toHaveURL(/\/?q=/);
+  await expect(page).toHaveURL(/tag=tech/);
+  await expect(page).toHaveURL(/sort=price_asc/);
+
+  const rows = page.locator('li.list-group-item');
+  await expect(rows).toHaveCount(2);
+
+  const firstRowText = (await rows.nth(0).textContent()) ?? '';
+  const secondRowText = (await rows.nth(1).textContent()) ?? '';
+
+  expect(firstRowText).toContain(secondTitle);
+  expect(secondRowText).toContain(firstTitle);
+
+  await expect(page.locator('details.mb-3').first()).toHaveAttribute('open', '');
+});
 test('exploratory smoke suite: navigation, console, and HTTP errors', async ({ page }) => {
   const consoleErrors: string[] = [];
   const httpErrors: string[] = [];
@@ -106,6 +163,7 @@ test('custom wait duration validates invalid values', async ({ page }) => {
   await page.goto('/items/new');
 
   await page.getByLabel('Wait time').selectOption('custom');
+  await expect(page.getByLabel('Custom hours')).toBeEnabled();
   await page.getByLabel('Custom hours').fill('0');
   await page.getByLabel('Title *').fill(uniqueTitle('Vinyl'));
 
@@ -211,7 +269,8 @@ test('editing a skipped item with future wait time reopens it as waiting', async
 
   const title = uniqueTitle('Skipped reopen');
   await page.getByLabel('Wait time').selectOption('custom');
-  await page.getByLabel('Custom hours').fill('0.0003');
+  await expect(page.getByLabel('Custom hours')).toBeEnabled();
+  await page.getByLabel('Custom hours').fill('0.002');
   await page.getByLabel('Title *').fill(title);
   await page.getByRole('button', { name: 'Add to waitlist' }).click();
 
@@ -238,7 +297,8 @@ test('snooze +24h is only available for ready items and immediately moves the it
 
   const title = uniqueTitle('Snooze');
   await page.getByLabel('Wait time').selectOption('custom');
-  await page.getByLabel('Custom hours').fill('0.0003');
+  await expect(page.getByLabel('Custom hours')).toBeEnabled();
+  await page.getByLabel('Custom hours').fill('0.002');
   await page.getByLabel('Title *').fill(title);
   await page.getByRole('button', { name: 'Add to waitlist' }).click();
 
@@ -295,7 +355,8 @@ test('delete flow supports cancel and removes item from dashboard and insights o
   await page.getByLabel('Title *').fill(title);
   await page.getByLabel('Price').fill('99.50');
   await page.getByLabel('Wait time').selectOption('custom');
-  await page.getByLabel('Custom hours').fill('0.0003');
+  await expect(page.getByLabel('Custom hours')).toBeEnabled();
+  await page.getByLabel('Custom hours').fill('0.002');
   await page.getByRole('button', { name: 'Add to waitlist' }).click();
 
   const readyRow = await waitForItemStatus(page, title, 'Ready to buy');
@@ -339,7 +400,7 @@ async function waitForItemStatus(page: Page, title: string, status: string) {
         return badgeText.trim();
       },
       {
-        timeout: 15_000,
+        timeout: 20_000,
         intervals: [300, 500, 1_000],
       },
     )
@@ -354,7 +415,8 @@ test('item auto-promotes to Ready to buy after wait time elapsed', async ({ page
 
   const title = uniqueTitle('Auto-Promotion');
   await page.getByLabel('Wait time').selectOption('custom');
-  await page.getByLabel('Custom hours').fill('0.0003');
+  await expect(page.getByLabel('Custom hours')).toBeEnabled();
+  await page.getByLabel('Custom hours').fill('0.002');
   await page.getByLabel('Title *').fill(title);
   await page.getByRole('button', { name: 'Add to waitlist' }).click();
 
