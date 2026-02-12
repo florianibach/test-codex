@@ -34,6 +34,9 @@ jobs:
       - name: Run exploratory smoke suite
         run: npm run test:e2e:smoke
 
+      - name: Run monkeyish suite
+        run: npm run test:e2e:monkeyish
+
       - name: Upload Playwright artifacts
         if: always()
         uses: actions/upload-artifact@v4

@@ -117,6 +117,12 @@ Run smoke suite:
 npm run test:e2e:smoke
 ```
 
+Run monkeyish robustness suite:
+
+```bash
+npm run test:e2e:monkeyish
+```
+
 The smoke suite checks:
 
 - Navigation across pages
