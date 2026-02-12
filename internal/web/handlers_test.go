@@ -389,6 +389,85 @@ func TestCreateItemWithSpecificDateWaitPreset(t *testing.T) {
 	}
 }
 
+func TestCreateItemWithSpecificDateUsesLocalTimezone(t *testing.T) {
+	originalLocal := time.Local
+	loc := time.FixedZone("UTC+1", 1*60*60)
+	time.Local = loc
+	t.Cleanup(func() {
+		time.Local = originalLocal
+	})
+
+	app := NewApp()
+	seedProfile(app)
+
+	form := url.Values{}
+	form.Set("title", "Timezone item")
+	form.Set("wait_preset", "date")
+	form.Set("purchase_allowed_at", "2026-01-15T19:45")
+
+	req := httptest.NewRequest(http.MethodPost, "/items/new", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", rr.Code)
+	}
+
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if len(app.items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(app.items))
+	}
+
+	got := app.items[0].PurchaseAllowedAt
+	if got.Location() != loc {
+		t.Fatalf("expected parsed location %q, got %q", loc.String(), got.Location().String())
+	}
+	if got.Hour() != 19 || got.Minute() != 45 {
+		t.Fatalf("expected local 19:45, got %02d:%02d", got.Hour(), got.Minute())
+	}
+}
+
+func TestCreateItemWithSpecificDateUsesBrowserTimezoneOffset(t *testing.T) {
+	originalLocal := time.Local
+	time.Local = time.UTC
+	t.Cleanup(func() {
+		time.Local = originalLocal
+	})
+
+	app := NewApp()
+	seedProfile(app)
+
+	form := url.Values{}
+	form.Set("title", "Timezone offset item")
+	form.Set("wait_preset", "date")
+	form.Set("purchase_allowed_at", "2026-01-15T19:45")
+	form.Set("timezone_offset_minutes", "-60")
+
+	req := httptest.NewRequest(http.MethodPost, "/items/new", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", rr.Code)
+	}
+
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if len(app.items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(app.items))
+	}
+
+	gotUTC := app.items[0].PurchaseAllowedAt.UTC()
+	if gotUTC.Hour() != 18 || gotUTC.Minute() != 45 {
+		t.Fatalf("expected UTC 18:45 for browser offset -60, got %02d:%02d", gotUTC.Hour(), gotUTC.Minute())
+	}
+}
+
 func TestCreateItemWithSpecificDateRequiresDateInput(t *testing.T) {
 	app := NewApp()
 	seedProfile(app)
@@ -550,6 +629,43 @@ func TestEditItemSetsStatusToReadyToBuyWhenBuyAfterIsInPast(t *testing.T) {
 	defer app.mu.RUnlock()
 	if got := app.items[0].Status; got != "Ready to buy" {
 		t.Fatalf("expected status Ready to buy, got %q", got)
+	}
+}
+
+func TestEditItemSpecificDateUsesBrowserTimezoneOffset(t *testing.T) {
+	originalLocal := time.Local
+	time.Local = time.UTC
+	t.Cleanup(func() {
+		time.Local = originalLocal
+	})
+
+	app := NewApp()
+	now := time.Now()
+	app.mu.Lock()
+	app.items = append(app.items, Item{ID: 1, Title: "Original", Status: "Waiting", WaitPreset: "24h", PurchaseAllowedAt: now.Add(24 * time.Hour), CreatedAt: now})
+	app.mu.Unlock()
+
+	form := url.Values{}
+	form.Set("title", "Original")
+	form.Set("wait_preset", "date")
+	form.Set("purchase_allowed_at", "2026-01-15T19:45")
+	form.Set("timezone_offset_minutes", "-60")
+
+	req := httptest.NewRequest(http.MethodPost, "/items/edit?id=1", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", rr.Code)
+	}
+
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	gotUTC := app.items[0].PurchaseAllowedAt.UTC()
+	if gotUTC.Hour() != 18 || gotUTC.Minute() != 45 {
+		t.Fatalf("expected UTC 18:45 for browser offset -60, got %02d:%02d", gotUTC.Hour(), gotUTC.Minute())
 	}
 }
 
