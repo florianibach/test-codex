@@ -53,17 +53,14 @@
             <input id="link" name="link" class="form-control" placeholder="https://..." value="{{.FormValues.Link}}" />
           </div>
           <div>
-            <label for="tags" class="form-label">Tags</label>
-            <select id="tags" name="tags" class="form-select" multiple size="6" aria-describedby="tags-help">
-              {{range .TagOptions}}
-              <option value="{{.}}" {{if index $.SelectedTags .}}selected{{end}}>{{.}}</option>
+            <label class="form-label mb-1">Tags</label>
+            <div class="status-filter-group d-flex flex-wrap gap-2" role="group" aria-label="Tags">
+              {{range $idx, $tag := .TagOptions}}
+              <input class="status-filter-input" id="item-tag-{{$idx}}" type="checkbox" name="tags" value="{{$tag}}" {{if index $.SelectedTags $tag}}checked{{end}} />
+              <label class="btn btn-sm status-filter-badge" for="item-tag-{{$idx}}">{{$tag}}</label>
               {{end}}
-            </select>
-            <div id="tags-help" class="form-text">Choose one or multiple tags.</div>
-          </div>
-          <div>
-            <label for="custom_tag" class="form-label">Add custom tag (optional)</label>
-            <input id="custom_tag" name="custom_tag" class="form-control" placeholder="e.g. Gift" />
+            </div>
+            <div class="form-text">Manage available tags in <a href="/settings/tags">Tag settings</a>.</div>
           </div>
           <div>
             <label for="note" class="form-label">Note</label>

@@ -43,14 +43,17 @@
             <label class="btn btn-sm status-filter-badge" for="status-skipped">Skipped</label>
           </div>
         </div>
-        <div class="col-6 col-md-2">
-          <label for="tag" class="form-label">Tag</label>
-          <select id="tag" name="tag" class="form-select">
-            <option value="">All tags</option>
-            {{range .TagOptions}}
-            <option value="{{.}}" {{if eq $.TagFilter .}}selected{{end}}>{{.}}</option>
+        <div class="col-12">
+          <label class="form-label mb-1">Tag</label>
+          <div class="status-filter-group d-flex flex-wrap gap-2" role="group" aria-label="Tag filter">
+            <input class="status-filter-input" id="tag-all" type="radio" name="tag" value="" {{if eq .TagFilter ""}}checked{{end}} />
+            <label class="btn btn-sm status-filter-badge" for="tag-all">All tags</label>
+
+            {{range $idx, $tag := .TagOptions}}
+            <input class="status-filter-input" id="tag-filter-{{$idx}}" type="radio" name="tag" value="{{$tag}}" {{if eq $.TagFilter $tag}}checked{{end}} />
+            <label class="btn btn-sm status-filter-badge" for="tag-filter-{{$idx}}">{{$tag}}</label>
             {{end}}
-          </select>
+          </div>
         </div>
         <div class="col-12 col-md-3">
           <label for="sort" class="form-label">Sort</label>
@@ -201,12 +204,17 @@
 
     syncAllStatusesButton();
 
-    ["#sort", "#tag"].forEach(function (selector) {
+    ["#sort"].forEach(function (selector) {
       var field = filterForm.querySelector(selector);
       if (!field) {
         return;
       }
       field.addEventListener("change", submitFilterForm);
+    });
+
+    var tagInputs = Array.prototype.slice.call(filterForm.querySelectorAll("input[name='tag']"));
+    tagInputs.forEach(function (tagInput) {
+      tagInput.addEventListener("change", submitFilterForm);
     });
 
     var searchField = filterForm.querySelector("#q");

@@ -83,6 +83,22 @@ func TestInsightsRouteGet(t *testing.T) {
 	}
 }
 
+func TestTagSettingsRouteGet(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+	req := httptest.NewRequest(http.MethodGet, "/settings/tags", nil)
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if body := rr.Body.String(); !strings.Contains(body, "Tag settings") {
+		t.Fatalf("expected tag settings page content")
+	}
+}
+
 func TestItemsNewRouteGet(t *testing.T) {
 	app := NewApp()
 	req := httptest.NewRequest(http.MethodGet, "/items/new", nil)
@@ -331,7 +347,7 @@ func TestHomeFiltersBySearchStatusAndTag(t *testing.T) {
 	}
 }
 
-func TestItemFormShowsTagDropdownOptions(t *testing.T) {
+func TestItemFormShowsTagBadgeOptions(t *testing.T) {
 	app := NewApp()
 	seedProfile(app)
 
@@ -343,15 +359,13 @@ func TestItemFormShowsTagDropdownOptions(t *testing.T) {
 		t.Fatalf("expected 200, got %d", rr.Code)
 	}
 	body := rr.Body.String()
-	if !strings.Contains(body, "<select id=\"tags\" name=\"tags\" class=\"form-select\" multiple") {
-		t.Fatalf("expected tags multi-select in item form")
+	if !strings.Contains(body, "Manage available tags in") {
+		t.Fatalf("expected tags badge inputs in item form")
 	}
-	if !strings.Contains(body, ">Tech</option>") {
-		t.Fatalf("expected predefined tag option")
-	}
+
 }
 
-func TestCreateItemStoresDropdownAndCustomTags(t *testing.T) {
+func TestCreateItemStoresSelectedTagBadges(t *testing.T) {
 	app := NewApp()
 	seedProfile(app)
 
@@ -359,7 +373,6 @@ func TestCreateItemStoresDropdownAndCustomTags(t *testing.T) {
 	form.Set("title", "Tagged item")
 	form.Add("tags", "Tech")
 	form.Add("tags", "Audio")
-	form.Set("custom_tag", "Gift")
 
 	req := httptest.NewRequest(http.MethodPost, "/items/new", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -375,7 +388,7 @@ func TestCreateItemStoresDropdownAndCustomTags(t *testing.T) {
 	if len(app.items) != 1 {
 		t.Fatalf("expected one item, got %d", len(app.items))
 	}
-	if got := app.items[0].Tags; got != "Tech, Audio, Gift" {
+	if got := app.items[0].Tags; got != "Tech, Audio" {
 		t.Fatalf("expected merged tags, got %q", got)
 	}
 }
@@ -405,6 +418,46 @@ func TestHomeTagFilterUsesDropdownExactTagMatch(t *testing.T) {
 	}
 	if strings.Contains(body, "Book") {
 		t.Fatalf("did not expect partial tag match item to be present")
+	}
+}
+
+func TestTagSettingsAddAndDeleteTag(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+
+	addForm := url.Values{}
+	addForm.Set("action", "add")
+	addForm.Set("tag", "Gift")
+	addReq := httptest.NewRequest(http.MethodPost, "/settings/tags", strings.NewReader(addForm.Encode()))
+	addReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(addRR, addReq)
+	if addRR.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", addRR.Code)
+	}
+
+	app.mu.Lock()
+	app.items = append(app.items, Item{ID: 1, Title: "Keep", Tags: "Gift, Tech", Status: "Waiting", CreatedAt: time.Now(), PurchaseAllowedAt: time.Now().Add(time.Hour)})
+	app.mu.Unlock()
+
+	delForm := url.Values{}
+	delForm.Set("action", "delete")
+	delForm.Set("tag", "Gift")
+	delReq := httptest.NewRequest(http.MethodPost, "/settings/tags", strings.NewReader(delForm.Encode()))
+	delReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	delRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(delRR, delReq)
+	if delRR.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", delRR.Code)
+	}
+
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if slices.ContainsFunc(app.tagCatalog, func(v string) bool { return strings.EqualFold(v, "Gift") }) {
+		t.Fatalf("expected Gift to be removed from tag catalog")
+	}
+	if got := app.items[0].Tags; got != "Tech" {
+		t.Fatalf("expected deleted tag removed from item tags, got %q", got)
 	}
 }
 

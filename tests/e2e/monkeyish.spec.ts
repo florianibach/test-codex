@@ -54,7 +54,7 @@ test('R1-005 monkeyish: random-ish interactions keep insights stable', async ({ 
         await page.getByLabel('Price').fill(String((next() % 200) + 1));
       }
       if (next() % 2 === 0) {
-        await page.getByLabel('Tags').selectOption(next() % 2 === 0 ? 'Tech' : 'Home');
+        await page.locator('label.status-filter-badge').filter({ hasText: next() % 2 === 0 ? 'Tech' : 'Home' }).first().click();
       }
       await page.getByRole('button', { name: 'Add to waitlist' }).click();
       await expect(page.getByRole('heading', { name: 'Waitlist dashboard' })).toBeVisible();
