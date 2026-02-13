@@ -45,7 +45,12 @@
         </div>
         <div class="col-6 col-md-2">
           <label for="tag" class="form-label">Tag</label>
-          <input id="tag" name="tag" class="form-control" value="{{.TagFilter}}" placeholder="e.g. tech" />
+          <select id="tag" name="tag" class="form-select">
+            <option value="">All tags</option>
+            {{range .TagOptions}}
+            <option value="{{.}}" {{if eq $.TagFilter .}}selected{{end}}>{{.}}</option>
+            {{end}}
+          </select>
         </div>
         <div class="col-12 col-md-3">
           <label for="sort" class="form-label">Sort</label>

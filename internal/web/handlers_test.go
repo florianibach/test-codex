@@ -331,6 +331,83 @@ func TestHomeFiltersBySearchStatusAndTag(t *testing.T) {
 	}
 }
 
+func TestItemFormShowsTagDropdownOptions(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+
+	req := httptest.NewRequest(http.MethodGet, "/items/new", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "<select id=\"tags\" name=\"tags\" class=\"form-select\" multiple") {
+		t.Fatalf("expected tags multi-select in item form")
+	}
+	if !strings.Contains(body, ">Tech</option>") {
+		t.Fatalf("expected predefined tag option")
+	}
+}
+
+func TestCreateItemStoresDropdownAndCustomTags(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+
+	form := url.Values{}
+	form.Set("title", "Tagged item")
+	form.Add("tags", "Tech")
+	form.Add("tags", "Audio")
+	form.Set("custom_tag", "Gift")
+
+	req := httptest.NewRequest(http.MethodPost, "/items/new", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", rr.Code)
+	}
+
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if len(app.items) != 1 {
+		t.Fatalf("expected one item, got %d", len(app.items))
+	}
+	if got := app.items[0].Tags; got != "Tech, Audio, Gift" {
+		t.Fatalf("expected merged tags, got %q", got)
+	}
+}
+
+func TestHomeTagFilterUsesDropdownExactTagMatch(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+
+	now := time.Now()
+	app.mu.Lock()
+	app.items = append(app.items,
+		Item{ID: 1, Title: "Phone", Tags: "Tech", Status: "Ready to buy", CreatedAt: now.Add(-2 * time.Hour), PurchaseAllowedAt: now.Add(-time.Hour)},
+		Item{ID: 2, Title: "Book", Tags: "Biotech", Status: "Ready to buy", CreatedAt: now.Add(-time.Hour), PurchaseAllowedAt: now.Add(-time.Hour)},
+	)
+	app.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/?tag=Tech", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "Phone") {
+		t.Fatalf("expected exact tag match item to be present")
+	}
+	if strings.Contains(body, "Book") {
+		t.Fatalf("did not expect partial tag match item to be present")
+	}
+}
+
 func TestHomeSortsByPriceAscending(t *testing.T) {
 	app := NewApp()
 	seedProfile(app)

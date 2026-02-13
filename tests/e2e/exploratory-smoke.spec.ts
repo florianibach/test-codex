@@ -96,26 +96,26 @@ test('dashboard search, tag filter, and price sort work together', async ({ page
   await page.getByLabel('Title *').fill(firstTitle);
   await page.getByLabel('Price').fill('200');
   await page.getByLabel('Note').fill(searchToken);
-  await page.getByLabel('Tags').fill('tech');
+  await page.getByLabel('Tags').selectOption('Tech');
   await page.getByRole('button', { name: 'Add to waitlist' }).click();
 
   await page.goto('/items/new');
   await page.getByLabel('Title *').fill(secondTitle);
   await page.getByLabel('Price').fill('50');
   await page.getByLabel('Note').fill(searchToken);
-  await page.getByLabel('Tags').fill('tech');
+  await page.getByLabel('Tags').selectOption('Tech');
   await page.getByRole('button', { name: 'Add to waitlist' }).click();
 
   const filterPanel = page.locator('details.mb-3').first();
   await filterPanel.locator('summary').click();
 
   await page.getByLabel('Search').fill(searchToken);
-  await page.getByLabel('Tag').fill('tech');
+  await page.getByLabel('Tag').selectOption('Tech');
   await page.getByLabel('Sort').selectOption('price_asc');
   await expect(page).toHaveURL(/sort=price_asc/);
 
   await expect(page).toHaveURL(/\/?q=/);
-  await expect(page).toHaveURL(/tag=tech/);
+  await expect(page).toHaveURL(/tag=Tech/);
   await expect(page).toHaveURL(/sort=price_asc/);
 
   const rows = page.locator('li.list-group-item');
@@ -130,6 +130,32 @@ test('dashboard search, tag filter, and price sort work together', async ({ page
   await expect(page.locator('details.mb-3').first()).toHaveAttribute('open', '');
 });
 
+
+
+
+test('R1-007 tags use dropdown options and support custom tag extension', async ({ page }) => {
+  await ensureProfileConfigured(page);
+
+  const title = uniqueTitle('R1-007 tagged');
+
+  await page.goto('/items/new');
+  await page.getByLabel('Title *').fill(title);
+  await page.getByLabel('Tags').selectOption(['Tech', 'Audio']);
+  await page.getByLabel('Add custom tag (optional)').fill('Gift');
+  await page.getByRole('button', { name: 'Add to waitlist' }).click();
+
+  const row = page.locator('li.list-group-item').filter({ hasText: title }).first();
+  await expect(row).toContainText(/Tags: .*Tech/);
+  await expect(row).toContainText(/Tags: .*Audio/);
+  await expect(row).toContainText(/Tags: .*Gift/);
+
+  const filterPanel = page.locator('details.mb-3').first();
+  await filterPanel.locator('summary').click();
+  await page.getByLabel('Tag').selectOption('Gift');
+
+  await expect(page).toHaveURL(/tag=Gift/);
+  await expect(page.locator('li.list-group-item').filter({ hasText: title })).toHaveCount(1);
+});
 
 test('dashboard search matches title and link fields explicitly', async ({ page }) => {
   await ensureProfileConfigured(page);

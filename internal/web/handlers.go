@@ -46,6 +46,7 @@ type homeViewData struct {
 	SearchQuery     string
 	SelectedStatus  map[string]bool
 	TagFilter       string
+	TagOptions      []string
 	SortBy          string
 	HasActiveFilter bool
 	TotalItems      int
@@ -105,11 +106,15 @@ type itemFormViewData struct {
 	SubmitLabel          string
 	CancelHref           string
 	FormValues           Item
+	TagOptions           []string
+	SelectedTags         map[string]bool
 	PurchaseAllowedInput string
 	Error                string
 	Currency             string
 	ActiveProfile        string
 }
+
+var defaultTagOptions = []string{"Tech", "Audio", "Gaming", "Home", "Fashion", "Sports", "Office", "Travel", "Health", "Education"}
 
 type profileViewData struct {
 	Title                  string
@@ -352,7 +357,7 @@ func (a *App) createItem(w http.ResponseWriter, r *http.Request) {
 		Price:           strings.TrimSpace(r.FormValue("price")),
 		Link:            strings.TrimSpace(r.FormValue("link")),
 		Note:            strings.TrimSpace(r.FormValue("note")),
-		Tags:            strings.TrimSpace(r.FormValue("tags")),
+		Tags:            parseTagsFromForm(r.Form["tags"], r.FormValue("custom_tag")),
 		WaitPreset:      strings.TrimSpace(r.FormValue("wait_preset")),
 		WaitCustomHours: strings.TrimSpace(r.FormValue("wait_custom_hours")),
 	}
@@ -464,7 +469,7 @@ func (a *App) updateItem(w http.ResponseWriter, r *http.Request) {
 		Price:           strings.TrimSpace(r.FormValue("price")),
 		Link:            strings.TrimSpace(r.FormValue("link")),
 		Note:            strings.TrimSpace(r.FormValue("note")),
-		Tags:            strings.TrimSpace(r.FormValue("tags")),
+		Tags:            parseTagsFromForm(r.Form["tags"], r.FormValue("custom_tag")),
 		WaitPreset:      strings.TrimSpace(r.FormValue("wait_preset")),
 		WaitCustomHours: strings.TrimSpace(r.FormValue("wait_custom_hours")),
 	}
@@ -1024,7 +1029,7 @@ func filterAndSortItems(items []Item, searchQuery string, statuses []string, tag
 			continue
 		}
 
-		if trimmedTag != "" && !strings.Contains(strings.ToLower(item.Tags), trimmedTag) {
+		if trimmedTag != "" && !itemHasTag(item.Tags, trimmedTag) {
 			continue
 		}
 
@@ -1134,6 +1139,7 @@ func (a *App) renderHome(w http.ResponseWriter, r *http.Request, data homeViewDa
 		data.SelectedStatus[status] = true
 	}
 	data.TagFilter = strings.TrimSpace(r.URL.Query().Get("tag"))
+	data.TagOptions = availableTagOptions(allItems)
 	data.SortBy = normalizeSortBy(r.URL.Query().Get("sort"))
 	data.HasActiveFilter = data.SearchQuery != "" || data.TagFilter != "" || data.SortBy != "next_ready" || explicitStatusSelection
 	data.Items = filterAndSortItems(allItems, data.SearchQuery, selectedStatuses, data.TagFilter, data.SortBy)
@@ -1167,6 +1173,9 @@ func (a *App) renderItemForm(w http.ResponseWriter, data itemFormViewData) {
 	data.Currency = profileCurrencyOrDefault(a.currency)
 	data.ActiveProfile = a.currentUserIDLocked()
 	a.mu.Unlock()
+
+	data.TagOptions = availableTagOptions(data.Items)
+	data.SelectedTags = selectedTagsMap(data.FormValues.Tags)
 
 	if data.FormValues.WaitPreset == "" {
 		a.mu.RLock()
@@ -1646,6 +1655,82 @@ func categoriesFromTags(rawTags string) []string {
 	}
 
 	return categories
+}
+
+func availableTagOptions(items []Item) []string {
+	options := make([]string, len(defaultTagOptions))
+	copy(options, defaultTagOptions)
+
+	seen := map[string]struct{}{}
+	for _, option := range options {
+		seen[strings.ToLower(option)] = struct{}{}
+	}
+
+	for _, item := range items {
+		for _, category := range strings.Split(item.Tags, ",") {
+			tag := strings.TrimSpace(category)
+			if tag == "" {
+				continue
+			}
+			key := strings.ToLower(tag)
+			if _, exists := seen[key]; exists {
+				continue
+			}
+			seen[key] = struct{}{}
+			options = append(options, tag)
+		}
+	}
+
+	slices.SortFunc(options, func(a string, b string) int {
+		return strings.Compare(strings.ToLower(a), strings.ToLower(b))
+	})
+
+	return options
+}
+
+func selectedTagsMap(rawTags string) map[string]bool {
+	selected := map[string]bool{}
+	for _, part := range strings.Split(rawTags, ",") {
+		tag := strings.TrimSpace(part)
+		if tag == "" {
+			continue
+		}
+		selected[tag] = true
+	}
+	return selected
+}
+
+func parseTagsFromForm(selectedTags []string, customTag string) string {
+	combined := append([]string{}, selectedTags...)
+	if trimmedCustom := strings.TrimSpace(customTag); trimmedCustom != "" {
+		combined = append(combined, trimmedCustom)
+	}
+
+	seen := map[string]struct{}{}
+	normalized := make([]string, 0, len(combined))
+	for _, raw := range combined {
+		tag := strings.TrimSpace(raw)
+		if tag == "" {
+			continue
+		}
+		key := strings.ToLower(tag)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, tag)
+	}
+
+	return strings.Join(normalized, ", ")
+}
+
+func itemHasTag(rawTags string, normalizedTagFilter string) bool {
+	for _, part := range strings.Split(rawTags, ",") {
+		if strings.ToLower(strings.TrimSpace(part)) == normalizedTagFilter {
+			return true
+		}
+	}
+	return false
 }
 
 func mul100(v float64) float64 {
