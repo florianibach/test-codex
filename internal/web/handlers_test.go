@@ -2023,6 +2023,24 @@ func TestSwitchProfileChangesContextAndSetsCookie(t *testing.T) {
 	}
 }
 
+func TestAboutShowsActiveProfileInHeader(t *testing.T) {
+	app := NewApp()
+	app.mu.Lock()
+	app.activeUserID = "Test"
+	app.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/about", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if body := rr.Body.String(); !strings.Contains(body, "Profile: Test") {
+		t.Fatalf("expected active profile in about header")
+	}
+}
+
 func newSQLiteTestApp(t *testing.T) (*App, func()) {
 	t.Helper()
 	dir := t.TempDir()

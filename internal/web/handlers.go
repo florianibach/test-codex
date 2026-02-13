@@ -139,6 +139,7 @@ type profileSwitchViewData struct {
 	Title           string
 	CurrentPath     string
 	ContentTemplate string
+	ScriptTemplate  string
 	SelectedName    string
 	Names           []string
 	Error           string
@@ -1551,7 +1552,7 @@ func statusBadgeClass(status string) string {
 }
 
 func (a *App) about(w http.ResponseWriter, r *http.Request) {
-	renderTemplate(w, a.templates, "layout", pageData{Title: "About", CurrentPath: "/about", ContentTemplate: "about_content"})
+	renderTemplate(w, a.templates, "layout", pageData{Title: "About", CurrentPath: "/about", ContentTemplate: "about_content", ActiveProfile: a.activeProfileName()})
 }
 
 func (a *App) health(w http.ResponseWriter, r *http.Request) {
