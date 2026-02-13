@@ -2091,6 +2091,67 @@ func TestAboutShowsActiveProfileInHeader(t *testing.T) {
 	}
 }
 
+func TestProfileSettingsCanRenameActiveProfile(t *testing.T) {
+	app, cleanup := newSQLiteTestApp(t)
+	defer cleanup()
+
+	app.mu.Lock()
+	app.activeUserID = "OldName"
+	app.hourlyWage = "30"
+	if err := app.persistProfileLocked(); err != nil {
+		app.mu.Unlock()
+		t.Fatalf("persist old profile: %v", err)
+	}
+	item := Item{Title: "owned-item", Status: "Waiting", WaitPreset: "24h", PurchaseAllowedAt: time.Now().Add(24 * time.Hour), CreatedAt: time.Now()}
+	if err := app.insertItemLocked(&item); err != nil {
+		app.mu.Unlock()
+		t.Fatalf("insert old profile item: %v", err)
+	}
+	app.mu.Unlock()
+
+	form := url.Values{}
+	form.Set("profile_name", "NewName")
+	form.Set("hourly_wage", "30")
+	form.Set("default_wait_preset", "24h")
+	form.Set("currency", "EUR")
+	req := httptest.NewRequest(http.MethodPost, "/settings/profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected redirect, got %d", rr.Code)
+	}
+	if got := rr.Header().Get("Set-Cookie"); !strings.Contains(got, "active_profile=NewName") {
+		t.Fatalf("expected active_profile cookie for renamed profile, got %q", got)
+	}
+
+	app.mu.RLock()
+	if app.activeUserID != "NewName" {
+		app.mu.RUnlock()
+		t.Fatalf("expected active profile renamed to NewName, got %q", app.activeUserID)
+	}
+	app.mu.RUnlock()
+
+	switchReq := httptest.NewRequest(http.MethodPost, "/switch-profile", strings.NewReader(url.Values{"profile_name": {"NewName"}}.Encode()))
+	switchReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	switchRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(switchRR, switchReq)
+	if switchRR.Code != http.StatusSeeOther {
+		t.Fatalf("expected switch redirect, got %d", switchRR.Code)
+	}
+
+	homeReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	homeRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(homeRR, homeReq)
+	if homeRR.Code != http.StatusOK {
+		t.Fatalf("expected home 200, got %d", homeRR.Code)
+	}
+	if body := homeRR.Body.String(); !strings.Contains(body, "owned-item") {
+		t.Fatalf("expected item to remain with renamed profile")
+	}
+}
+
 func newSQLiteTestApp(t *testing.T) (*App, func()) {
 	t.Helper()
 	dir := t.TempDir()

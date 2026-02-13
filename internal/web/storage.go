@@ -339,6 +339,41 @@ func (a *App) updatePromotedItemLocked(item Item) error {
 	return nil
 }
 
+func (a *App) renameProfileLocked(oldUserID, newUserID string) error {
+	if a.db == nil {
+		return nil
+	}
+
+	tx, err := a.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin rename profile tx: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	if _, err := tx.Exec(`
+UPDATE items
+SET user_id = ?
+WHERE user_id = ?
+`, newUserID, oldUserID); err != nil {
+		return fmt.Errorf("move items to renamed profile: %w", err)
+	}
+
+	if _, err := tx.Exec(`
+UPDATE profiles
+SET user_id = ?
+WHERE user_id = ?
+`, newUserID, oldUserID); err != nil {
+		return fmt.Errorf("rename profile row: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit rename profile tx: %w", err)
+	}
+	return nil
+}
+
 func boolToInt(v bool) int {
 	if v {
 		return 1

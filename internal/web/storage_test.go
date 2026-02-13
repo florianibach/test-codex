@@ -121,3 +121,69 @@ func TestDeleteItemPersistsInSQLite(t *testing.T) {
 		t.Fatalf("expected deleted item to stay deleted after reload")
 	}
 }
+
+func TestRenameProfilePersistsAcrossReloadInSQLite(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "app.db")
+
+	app, err := NewAppWithSQLite(dbPath)
+	if err != nil {
+		t.Fatalf("expected app to initialize with sqlite, got error: %v", err)
+	}
+
+	setupForm := url.Values{}
+	setupForm.Set("profile_name", "OldName")
+	setupForm.Set("hourly_wage", "42")
+	setupForm.Set("default_wait_preset", "24h")
+	setupReq := httptest.NewRequest(http.MethodPost, "/settings/profile", strings.NewReader(setupForm.Encode()))
+	setupReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	setupRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(setupRR, setupReq)
+	if setupRR.Code != http.StatusSeeOther {
+		t.Fatalf("expected profile save redirect, got %d", setupRR.Code)
+	}
+
+	itemForm := url.Values{}
+	itemForm.Set("title", "Rename persists")
+	itemReq := httptest.NewRequest(http.MethodPost, "/items/new", strings.NewReader(itemForm.Encode()))
+	itemReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	itemRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(itemRR, itemReq)
+	if itemRR.Code != http.StatusSeeOther {
+		t.Fatalf("expected item save redirect, got %d", itemRR.Code)
+	}
+
+	renameForm := url.Values{}
+	renameForm.Set("profile_name", "NewName")
+	renameForm.Set("hourly_wage", "42")
+	renameForm.Set("default_wait_preset", "24h")
+	renameReq := httptest.NewRequest(http.MethodPost, "/settings/profile", strings.NewReader(renameForm.Encode()))
+	renameReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	renameRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(renameRR, renameReq)
+	if renameRR.Code != http.StatusSeeOther {
+		t.Fatalf("expected rename redirect, got %d", renameRR.Code)
+	}
+
+	reloadedApp, err := NewAppWithSQLite(dbPath)
+	if err != nil {
+		t.Fatalf("expected app reload with sqlite, got error: %v", err)
+	}
+
+	switchReq := httptest.NewRequest(http.MethodPost, "/switch-profile", strings.NewReader(url.Values{"profile_name": {"NewName"}}.Encode()))
+	switchReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	switchRR := httptest.NewRecorder()
+	reloadedApp.Handler().ServeHTTP(switchRR, switchReq)
+	if switchRR.Code != http.StatusSeeOther {
+		t.Fatalf("expected switch redirect to renamed profile, got %d", switchRR.Code)
+	}
+
+	homeReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	homeRR := httptest.NewRecorder()
+	reloadedApp.Handler().ServeHTTP(homeRR, homeReq)
+	if homeRR.Code != http.StatusOK {
+		t.Fatalf("expected home 200 after reload, got %d", homeRR.Code)
+	}
+	if body := homeRR.Body.String(); !strings.Contains(body, "Rename persists") {
+		t.Fatalf("expected item to remain visible under renamed profile")
+	}
+}

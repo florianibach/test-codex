@@ -116,6 +116,7 @@ type profileViewData struct {
 	CurrentPath            string
 	ContentTemplate        string
 	ScriptTemplate         string
+	ProfileName            string
 	ProfileHourly          string
 	DefaultWaitPreset      string
 	DefaultWaitCustomHours string
@@ -572,6 +573,28 @@ func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	profileNameRaw := strings.TrimSpace(r.FormValue("profile_name"))
+	if profileNameRaw == "" {
+		profileNameRaw = a.activeProfileName()
+	}
+	profileName, err := parseProfileName(profileNameRaw)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		a.renderProfile(w, profileViewData{
+			Title:                  "Profile settings",
+			CurrentPath:            "/settings/profile",
+			ProfileName:            strings.TrimSpace(profileNameRaw),
+			ProfileHourly:          strings.TrimSpace(r.FormValue("hourly_wage")),
+			DefaultWaitPreset:      strings.TrimSpace(r.FormValue("default_wait_preset")),
+			DefaultWaitCustomHours: strings.TrimSpace(r.FormValue("default_wait_custom_hours")),
+			NtfyEndpoint:           strings.TrimRight(strings.TrimSpace(r.FormValue("ntfy_endpoint")), "/"),
+			NtfyTopic:              strings.TrimSpace(r.FormValue("ntfy_topic")),
+			Currency:               normalizeCurrency(r.FormValue("currency")),
+			ProfileError:           err.Error(),
+		})
+		return
+	}
+
 	hourlyWage := strings.TrimSpace(r.FormValue("hourly_wage"))
 	defaultPreset := strings.TrimSpace(r.FormValue("default_wait_preset"))
 	defaultCustomHours := strings.TrimSpace(r.FormValue("default_wait_custom_hours"))
@@ -584,6 +607,7 @@ func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 		a.renderProfile(w, profileViewData{
 			Title:                  "Profile settings",
 			CurrentPath:            "/settings/profile",
+			ProfileName:            profileName,
 			ProfileHourly:          hourlyWage,
 			DefaultWaitPreset:      defaultPreset,
 			DefaultWaitCustomHours: defaultCustomHours,
@@ -600,6 +624,7 @@ func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 		a.renderProfile(w, profileViewData{
 			Title:                  "Profile settings",
 			CurrentPath:            "/settings/profile",
+			ProfileName:            profileName,
 			ProfileHourly:          hourlyWage,
 			DefaultWaitPreset:      defaultPreset,
 			DefaultWaitCustomHours: defaultCustomHours,
@@ -616,6 +641,7 @@ func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 		a.renderProfile(w, profileViewData{
 			Title:                  "Profile settings",
 			CurrentPath:            "/settings/profile",
+			ProfileName:            profileName,
 			ProfileHourly:          hourlyWage,
 			DefaultWaitPreset:      defaultPreset,
 			DefaultWaitCustomHours: defaultCustomHours,
@@ -628,6 +654,16 @@ func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.mu.Lock()
+	previousProfileName := a.currentUserIDLocked()
+	if profileName != previousProfileName {
+		if err := a.renameProfileLocked(previousProfileName, profileName); err != nil {
+			a.mu.Unlock()
+			log.Printf("db error while renaming profile: %v", err)
+			http.Error(w, "could not rename profile", http.StatusInternalServerError)
+			return
+		}
+		a.activeUserID = profileName
+	}
 	a.hourlyWage = hourlyWage
 	a.defaultWaitPreset = defaultWaitPreset(defaultPreset)
 	if a.defaultWaitPreset == "custom" {
@@ -645,6 +681,7 @@ func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.mu.Unlock()
+	http.SetCookie(w, &http.Cookie{Name: "active_profile", Value: profileName, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode})
 
 	http.Redirect(w, r, "/settings/profile?saved=1", http.StatusSeeOther)
 }
@@ -1109,6 +1146,9 @@ func (a *App) renderItemForm(w http.ResponseWriter, data itemFormViewData) {
 
 func (a *App) renderProfile(w http.ResponseWriter, data profileViewData) {
 	a.mu.RLock()
+	if data.ProfileName == "" {
+		data.ProfileName = a.currentUserIDLocked()
+	}
 	if data.ProfileHourly == "" {
 		data.ProfileHourly = a.hourlyWage
 	}
@@ -1215,7 +1255,7 @@ func (a *App) switchProfile(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "could not load profiles", http.StatusInternalServerError)
 			return
 		}
-		renderTemplate(w, a.templates, "layout", profileSwitchViewData{Title: "Choose profile", CurrentPath: "/switch-profile", ContentTemplate: "switch_profile_content", Names: names, SelectedName: a.activeProfileName(), ActiveProfile: a.activeProfileName()})
+		renderTemplate(w, a.templates, "layout", profileSwitchViewData{Title: "Choose profile", CurrentPath: "/switch-profile", ContentTemplate: "switch_profile_content", Names: names, SelectedName: "", ActiveProfile: a.activeProfileName()})
 	case http.MethodPost:
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, "invalid form data", http.StatusBadRequest)
@@ -1224,7 +1264,7 @@ func (a *App) switchProfile(w http.ResponseWriter, r *http.Request) {
 		name, err := parseProfileName(r.FormValue("profile_name"))
 		if err != nil {
 			names, _ := a.listProfileNames()
-			renderTemplate(w, a.templates, "layout", profileSwitchViewData{Title: "Choose profile", CurrentPath: "/switch-profile", ContentTemplate: "switch_profile_content", Names: names, SelectedName: strings.TrimSpace(r.FormValue("profile_name")), Error: err.Error(), ActiveProfile: a.activeProfileName()})
+			renderTemplate(w, a.templates, "layout", profileSwitchViewData{Title: "Choose profile", CurrentPath: "/switch-profile", ContentTemplate: "switch_profile_content", Names: names, SelectedName: "", Error: err.Error(), ActiveProfile: a.activeProfileName()})
 			return
 		}
 

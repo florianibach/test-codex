@@ -8,18 +8,9 @@
     <div class="alert alert-danger py-2" role="alert">{{.Error}}</div>
     {{end}}
 
-    <form method="post" action="/switch-profile" class="vstack gap-3">
-      <div>
-        <label for="profile_name" class="form-label">Profile name</label>
-        <input id="profile_name" name="profile_name" type="text" class="form-control" placeholder="e.g. Alex" value="{{.SelectedName}}" required />
-      </div>
-      <button class="btn btn-outline-primary" type="submit">Continue</button>
-    </form>
-
     {{if .Names}}
-    <hr class="my-4" />
     <p class="small text-secondary mb-2">Existing profiles</p>
-    <div class="d-flex flex-wrap gap-2">
+    <div class="d-flex flex-wrap gap-2 mb-4">
       {{range .Names}}
       <form method="post" action="/switch-profile" class="d-inline">
         <input type="hidden" name="profile_name" value="{{.}}" />
@@ -28,6 +19,14 @@
       {{end}}
     </div>
     {{end}}
+
+    <form method="post" action="/switch-profile" class="vstack gap-3">
+      <div>
+        <label for="profile_name" class="form-label">Profile name</label>
+        <input id="profile_name" name="profile_name" type="text" class="form-control" placeholder="e.g. Alex" value="" required />
+      </div>
+      <button class="btn btn-outline-primary" type="submit">Create</button>
+    </form>
   </div>
 </section>
 {{end}}
