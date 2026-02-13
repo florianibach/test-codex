@@ -60,14 +60,6 @@ a:hover { text-decoration: underline; }
 
 .navbar-brand:hover { text-decoration: none; }
 
-.nav-right {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: .6rem;
-}
-
 .profile-badge {
   display: inline-flex;
   align-items: center;
@@ -129,6 +121,7 @@ a:hover { text-decoration: underline; }
 .nav-toggle[aria-expanded="true"] .nav-toggle-icon::after { transform: translateY(-.32rem) rotate(-45deg); }
 
 .navbar-nav {
+  margin-left: auto;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -380,22 +373,30 @@ summary:focus-visible {
   .nav-container {
     flex-wrap: wrap;
     align-items: center;
-  }
-
-  .nav-right {
-    width: 100%;
-    flex-wrap: wrap;
-    justify-content: flex-end;
+    row-gap: .5rem;
   }
 
   .nav-toggle {
     display: inline-flex;
+    order: 1;
+  }
+
+  .navbar-brand {
+    order: 2;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .profile-badge {
+    order: 3;
+    margin-left: auto;
   }
 
   .navbar-nav {
     display: none;
     width: 100%;
-    order: 3;
+    order: 4;
+    margin-left: 0;
     flex-direction: column;
     align-items: stretch;
     gap: .4rem;
@@ -424,14 +425,15 @@ summary:focus-visible {
 
   .nav-container {
     padding: .6rem .625rem;
-  }
-
-  .nav-right {
     gap: .5rem;
   }
 
+  .navbar-brand {
+    font-size: 1.05rem;
+  }
+
   .profile-badge {
-    max-width: calc(100% - 2.75rem);
+    max-width: 7.25rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

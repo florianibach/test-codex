@@ -10,21 +10,19 @@
 <body class="bg-body-tertiary">
   <header class="navbar shadow-sm">
     <div class="nav-container">
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="primary-nav" aria-label="Toggle navigation">
+        <span class="nav-toggle-icon" aria-hidden="true"></span>
+      </button>
       <a class="navbar-brand" href="/">Impulse Pause</a>
-      <div class="nav-right">
-        {{if .ActiveProfile}}<span class="profile-badge">{{.ActiveProfile}}</span>{{end}}
-        <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="primary-nav" aria-label="Toggle navigation">
-          <span class="nav-toggle-icon" aria-hidden="true"></span>
-        </button>
-        <nav class="navbar-nav" id="primary-nav" aria-label="Primary">
-          <a class="nav-link {{if eq .CurrentPath "/"}}active{{end}}" href="/">Dashboard</a>
-          <a class="nav-link {{if eq .CurrentPath "/items/new"}}active{{end}}" href="/items/new">Add item</a>
-          <a class="nav-link {{if eq .CurrentPath "/insights"}}active{{end}}" href="/insights">Insights</a>
-          <a class="nav-link {{if eq .CurrentPath "/settings/profile"}}active{{end}}" href="/settings/profile">Settings</a>
-          <a class="nav-link {{if eq .CurrentPath "/settings/tags"}}active{{end}}" href="/settings/tags">Tags</a>
-          <a class="nav-link {{if eq .CurrentPath "/about"}}active{{end}}" href="/about">About</a>
-        </nav>
-      </div>
+      <nav class="navbar-nav" id="primary-nav" aria-label="Primary">
+        <a class="nav-link {{if eq .CurrentPath "/"}}active{{end}}" href="/">Dashboard</a>
+        <a class="nav-link {{if eq .CurrentPath "/items/new"}}active{{end}}" href="/items/new">Add item</a>
+        <a class="nav-link {{if eq .CurrentPath "/insights"}}active{{end}}" href="/insights">Insights</a>
+        <a class="nav-link {{if eq .CurrentPath "/settings/profile"}}active{{end}}" href="/settings/profile">Settings</a>
+        <a class="nav-link {{if eq .CurrentPath "/settings/tags"}}active{{end}}" href="/settings/tags">Tags</a>
+        <a class="nav-link {{if eq .CurrentPath "/about"}}active{{end}}" href="/about">About</a>
+      </nav>
+      {{if .ActiveProfile}}<span class="profile-badge">{{.ActiveProfile}}</span>{{end}}
     </div>
   </header>
 
