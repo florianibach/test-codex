@@ -214,6 +214,10 @@ details > summary { cursor: pointer; }
 
 .status-filter-group {
   align-items: center;
+  border: 1px solid #c8d4e2;
+  border-radius: .5rem;
+  padding: .5rem;
+  background: #fff;
 }
 
 .status-filter-input {
