@@ -125,3 +125,51 @@ test('R1-008 monkeyish: currency flips keep money rendering stable across app ar
   expect(consoleErrors, `Console errors found: ${consoleErrors.join('\n')}`).toEqual([]);
   expect(httpErrors, `HTTP 4xx/5xx responses found: ${httpErrors.join('\n')}`).toEqual([]);
 });
+
+test('R1-007 monkeyish: tag management and badge-based filtering stay stable', async ({ page }) => {
+  const consoleErrors: string[] = [];
+  const httpErrors: string[] = [];
+
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') {
+      consoleErrors.push(msg.text());
+    }
+  });
+
+  page.on('response', (response) => {
+    if (response.status() >= 400) {
+      httpErrors.push(`${response.status()} ${response.url()}`);
+    }
+  });
+
+  await ensureProfileConfigured(page);
+
+  const managedTag = `Tag-${Date.now().toString().slice(-6)}`;
+  const itemTitle = uniqueTitle('R1-007 monkeyish');
+
+  await page.goto('/settings/tags');
+  await page.locator('input[name="tag"]').first().fill(managedTag);
+  await page.getByRole('button', { name: 'Add tag' }).click();
+  await expect(page.getByText('Tag added.')).toBeVisible();
+
+  await page.goto('/items/new');
+  await page.getByLabel('Title *').fill(itemTitle);
+  await page.locator('label.status-filter-badge').filter({ hasText: managedTag }).first().click();
+  await page.getByRole('button', { name: 'Add to waitlist' }).click();
+
+  await page.goto('/');
+  const filterPanel = page.locator('details.mb-3').first();
+  await filterPanel.locator('summary').click();
+  await page.locator('details.mb-3').first().locator('label.status-filter-badge').filter({ hasText: managedTag }).first().click();
+  await expect(page).toHaveURL(new RegExp(`tag=${managedTag}`));
+  await expect(page.locator('li.list-group-item').filter({ hasText: itemTitle })).toHaveCount(1);
+
+  await page.goto('/settings/tags');
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.locator(`form:has(input[name="tag"][value="${managedTag}"]) button`).click();
+  await expect(page.getByText('Tag deleted.')).toBeVisible();
+  await expect(page.locator('span.status-filter-badge', { hasText: managedTag })).toHaveCount(0);
+
+  expect(consoleErrors, `Console errors found: ${consoleErrors.join('\n')}`).toEqual([]);
+  expect(httpErrors, `HTTP 4xx/5xx responses found: ${httpErrors.join('\n')}`).toEqual([]);
+});
