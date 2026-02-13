@@ -97,7 +97,7 @@ CREATE INDEX IF NOT EXISTS idx_items_status_allowed ON items(status, purchase_al
 	return nil
 }
 
-func (a *App) loadStateFromDB() error {
+func (a *App) loadStateFromDB(userID string) error {
 	if a.db == nil {
 		return nil
 	}
@@ -105,7 +105,7 @@ func (a *App) loadStateFromDB() error {
 	a.items = nil
 	a.nextID = 1
 
-	row := a.db.QueryRow(`SELECT hourly_wage, currency, default_wait_preset, default_wait_custom_hours, ntfy_endpoint, ntfy_topic FROM profiles WHERE user_id = ?`, defaultUserID)
+	row := a.db.QueryRow(`SELECT hourly_wage, currency, default_wait_preset, default_wait_custom_hours, ntfy_endpoint, ntfy_topic FROM profiles WHERE user_id = ?`, userID)
 	var hourlyWage, currency, defaultPreset, defaultCustomHours, ntfyEndpoint, ntfyTopic string
 	switch err := row.Scan(&hourlyWage, &currency, &defaultPreset, &defaultCustomHours, &ntfyEndpoint, &ntfyTopic); {
 	case errors.Is(err, sql.ErrNoRows):
@@ -127,7 +127,7 @@ SELECT id, title, price, COALESCE(price_value, 0), has_price_value, link, note, 
 FROM items
 WHERE user_id = ?
 ORDER BY id DESC
-`, defaultUserID)
+`, userID)
 	if err != nil {
 		return fmt.Errorf("load items: %w", err)
 	}
@@ -185,6 +185,7 @@ ORDER BY id DESC
 }
 
 func (a *App) persistProfileLocked() error {
+	userID := a.currentUserIDLocked()
 	if a.db == nil {
 		return nil
 	}
@@ -199,7 +200,7 @@ ON CONFLICT(user_id) DO UPDATE SET
 	ntfy_endpoint = excluded.ntfy_endpoint,
 	ntfy_topic = excluded.ntfy_topic,
 	updated_at = excluded.updated_at
-`, defaultUserID, a.hourlyWage, normalizeCurrency(a.currency), defaultWaitPreset(a.defaultWaitPreset), a.defaultWaitCustomHours, a.ntfyURL, a.ntfyTopic, time.Now().Format(time.RFC3339Nano))
+`, userID, a.hourlyWage, normalizeCurrency(a.currency), defaultWaitPreset(a.defaultWaitPreset), a.defaultWaitCustomHours, a.ntfyURL, a.ntfyTopic, time.Now().Format(time.RFC3339Nano))
 	if err != nil {
 		return fmt.Errorf("persist profile: %w", err)
 	}
@@ -207,6 +208,7 @@ ON CONFLICT(user_id) DO UPDATE SET
 }
 
 func (a *App) insertItemLocked(item *Item) error {
+	userID := a.currentUserIDLocked()
 	if a.db == nil {
 		item.ID = a.nextID
 		a.nextID++
@@ -217,7 +219,7 @@ func (a *App) insertItemLocked(item *Item) error {
 INSERT INTO items(user_id, title, price, price_value, has_price_value, link, note, tags, status, wait_preset, wait_custom_hours, purchase_allowed_at, created_at, ntfy_attempted)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `,
-		defaultUserID,
+		userID,
 		item.Title,
 		item.Price,
 		item.PriceValue,
@@ -248,6 +250,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 }
 
 func (a *App) updateItemLocked(item Item) error {
+	userID := a.currentUserIDLocked()
 	if a.db == nil {
 		return nil
 	}
@@ -270,7 +273,7 @@ WHERE id = ? AND user_id = ?
 		item.PurchaseAllowedAt.Format(time.RFC3339Nano),
 		boolToInt(item.NtfyAttempted),
 		item.ID,
-		defaultUserID,
+		userID,
 	)
 	if err != nil {
 		return fmt.Errorf("update item: %w", err)
@@ -279,11 +282,12 @@ WHERE id = ? AND user_id = ?
 }
 
 func (a *App) deleteItemLocked(itemID int) error {
+	userID := a.currentUserIDLocked()
 	if a.db == nil {
 		return nil
 	}
 
-	_, err := a.db.Exec(`DELETE FROM items WHERE id = ? AND user_id = ?`, itemID, defaultUserID)
+	_, err := a.db.Exec(`DELETE FROM items WHERE id = ? AND user_id = ?`, itemID, userID)
 	if err != nil {
 		return fmt.Errorf("delete item: %w", err)
 	}
@@ -291,11 +295,12 @@ func (a *App) deleteItemLocked(itemID int) error {
 }
 
 func (a *App) updateItemStatusLocked(itemID int, status string) error {
+	userID := a.currentUserIDLocked()
 	if a.db == nil {
 		return nil
 	}
 
-	_, err := a.db.Exec(`UPDATE items SET status = ? WHERE id = ? AND user_id = ?`, status, itemID, defaultUserID)
+	_, err := a.db.Exec(`UPDATE items SET status = ? WHERE id = ? AND user_id = ?`, status, itemID, userID)
 	if err != nil {
 		return fmt.Errorf("update item status: %w", err)
 	}
@@ -303,11 +308,12 @@ func (a *App) updateItemStatusLocked(itemID int, status string) error {
 }
 
 func (a *App) markNtfyAttemptedLocked(itemID int) error {
+	userID := a.currentUserIDLocked()
 	if a.db == nil {
 		return nil
 	}
 
-	_, err := a.db.Exec(`UPDATE items SET ntfy_attempted = 1 WHERE id = ? AND user_id = ?`, itemID, defaultUserID)
+	_, err := a.db.Exec(`UPDATE items SET ntfy_attempted = 1 WHERE id = ? AND user_id = ?`, itemID, userID)
 	if err != nil {
 		return fmt.Errorf("mark ntfy attempted: %w", err)
 	}
@@ -315,11 +321,12 @@ func (a *App) markNtfyAttemptedLocked(itemID int) error {
 }
 
 func (a *App) updatePromotedItemLocked(item Item) error {
+	userID := a.currentUserIDLocked()
 	if a.db == nil {
 		return nil
 	}
 
-	_, err := a.db.Exec(`UPDATE items SET status = ?, ntfy_attempted = ? WHERE id = ? AND user_id = ?`, item.Status, boolToInt(item.NtfyAttempted), item.ID, defaultUserID)
+	_, err := a.db.Exec(`UPDATE items SET status = ?, ntfy_attempted = ? WHERE id = ? AND user_id = ?`, item.Status, boolToInt(item.NtfyAttempted), item.ID, userID)
 	if err != nil {
 		return fmt.Errorf("update promoted item: %w", err)
 	}

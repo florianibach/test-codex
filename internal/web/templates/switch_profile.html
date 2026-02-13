@@ -1,0 +1,23 @@
+{{define "switch_profile_content"}}
+<section class="card shadow-sm">
+  <div class="card-body">
+    <h1 class="h3 mb-1">Choose profile</h1>
+    <p class="text-secondary small mb-3">Select an existing name or create a new one. Data stays separated per name.</p>
+
+    {{if .Error}}
+    <div class="alert alert-danger py-2" role="alert">{{.Error}}</div>
+    {{end}}
+
+    <form method="post" action="/switch-profile" class="vstack gap-3">
+      <div>
+        <label for="profile_name" class="form-label">Profile name</label>
+        <input id="profile_name" name="profile_name" list="profile-names" type="text" class="form-control" placeholder="e.g. Alex" value="{{.SelectedName}}" required />
+        <datalist id="profile-names">
+          {{range .Names}}<option value="{{.}}"></option>{{end}}
+        </datalist>
+      </div>
+      <button class="btn btn-outline-primary" type="submit">Continue</button>
+    </form>
+  </div>
+</section>
+{{end}}
