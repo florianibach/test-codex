@@ -81,14 +81,13 @@
           <div class="item-main">
             <div class="item-title-row mb-1">
               <p class="fw-semibold mb-0 item-title">{{.Title}}</p>
-              <span class="badge {{statusBadgeClass .Status}} status-badge-mobile">{{.Status}}</span>
+              <span class="badge {{statusBadgeClass .Status}}">{{.Status}}</span>
             </div>
             {{if .Note}}<p class="small text-secondary mb-1">{{.Note}}</p>{{end}}
             {{if .Tags}}<p class="small text-secondary mb-1">Tags: {{.Tags}}</p>{{end}}
             {{if .Link}}<a class="small" href="{{.Link}}" target="_blank" rel="noreferrer">Open link</a>{{end}}
           </div>
           <div class="item-side text-end">
-            <span class="badge {{statusBadgeClass .Status}} status-badge-desktop">{{.Status}}</span>
             {{if .Price}}<p class="small text-secondary mb-0 mt-1">{{$.Currency}} {{.Price}}</p>{{end}}
             {{if .Price}}
             {{if workHoursAvailable . $.HourlyWage $.HasHourlyWage}}
