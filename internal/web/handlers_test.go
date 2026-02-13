@@ -258,6 +258,12 @@ func TestHomeFilterPanelIsCollapsedByDefault(t *testing.T) {
 	if strings.Contains(body, "<details class=\"mb-3\" open>") {
 		t.Fatalf("expected filter details to be collapsed by default")
 	}
+	if !strings.Contains(body, "data-auto-submit-filter=\"true\"") {
+		t.Fatalf("expected auto-submit filter form marker")
+	}
+	if strings.Contains(body, ">Apply<") {
+		t.Fatalf("did not expect manual apply button")
+	}
 }
 
 func TestHomeFilterPanelOpensWhenFiltersAreActive(t *testing.T) {

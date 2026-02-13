@@ -211,6 +211,41 @@ textarea.form-control { resize: vertical; }
 
 details > summary { cursor: pointer; }
 
+
+.status-filter-group {
+  align-items: center;
+}
+
+.status-filter-input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.status-filter-badge {
+  color: #4b5a70;
+  border-color: #c7d2e2;
+  background: #fff;
+  border-radius: 999px;
+}
+
+.status-filter-badge:hover {
+  color: #2f3a4d;
+  background: #edf2f8;
+  text-decoration: none;
+}
+
+.status-filter-input:checked + .status-filter-badge {
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-color: #b6b5ff;
+}
+
+.status-filter-input:focus-visible + .status-filter-badge {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
 @media (min-width: 768px) {
   .py-md-4 { padding-top: 1.5rem; padding-bottom: 1.5rem; }
 }
