@@ -1772,7 +1772,7 @@ func TestSnoozeItemRejectsFinalStatus(t *testing.T) {
 	}
 }
 
-func TestHomeShowsSnoozeOnlyForReadyItems(t *testing.T) {
+func TestHomeShowsSnoozeForAllVisibleItems(t *testing.T) {
 	app := NewApp()
 	seedProfile(app)
 	app.mu.Lock()
@@ -1792,10 +1792,10 @@ func TestHomeShowsSnoozeOnlyForReadyItems(t *testing.T) {
 	}
 	body := rr.Body.String()
 	if !strings.Contains(body, "Snooze +24h") {
-		t.Fatalf("expected snooze controls to render for ready item")
+		t.Fatalf("expected snooze controls to render")
 	}
-	if strings.Count(body, "Snooze +24h") != 1 {
-		t.Fatalf("expected snooze controls to render only once for ready item")
+	if strings.Count(body, "Snooze +24h") != 2 {
+		t.Fatalf("expected snooze controls for each item in the default home list")
 	}
 }
 
