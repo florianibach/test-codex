@@ -192,9 +192,13 @@ test('dashboard keeps combined search, status filter and sort consistent after r
   await filterPanel.locator('summary').click();
   await page.getByLabel('Search').fill(token);
   await expect(page).toHaveURL(/q=/);
-  await page.locator("label[for='status-waiting']").click();
-  await page.locator("label[for='status-ready']").click();
+
+  await setStatusFilter(page, 'status-waiting', false);
+  await setStatusFilter(page, 'status-ready', true);
+  await setStatusFilter(page, 'status-bought', false);
+  await setStatusFilter(page, 'status-skipped', false);
   await expect(page).toHaveURL(/status=Ready\+to\+buy/);
+
   await page.getByLabel('Sort').selectOption('newest');
   await expect(page).toHaveURL(/sort=newest/);
 
@@ -505,6 +509,17 @@ test('delete flow supports cancel and removes item from dashboard and insights o
 
 
 
+
+
+async function setStatusFilter(page: Page, inputId: string, shouldBeChecked: boolean) {
+  const statusInput = page.locator(`#${inputId}`);
+  const isChecked = await statusInput.isChecked();
+  if (isChecked === shouldBeChecked) {
+    return;
+  }
+
+  await page.locator(`label[for='${inputId}']`).click();
+}
 
 async function waitForItemStatus(page: Page, title: string, status: string) {
   await page.goto('/');
