@@ -421,6 +421,32 @@ func TestHomeTagFilterUsesDropdownExactTagMatch(t *testing.T) {
 	}
 }
 
+func TestTagSettingsDeleteDefaultTagRemovesItFromCatalogAndFilterOptions(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+
+	delForm := url.Values{}
+	delForm.Set("action", "delete")
+	delForm.Set("tag", "Tech")
+	delReq := httptest.NewRequest(http.MethodPost, "/settings/tags", strings.NewReader(delForm.Encode()))
+	delReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	delRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(delRR, delReq)
+	if delRR.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", delRR.Code)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/settings/tags", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if strings.Contains(rr.Body.String(), ">Tech</span>") {
+		t.Fatalf("expected deleted default tag to not be listed")
+	}
+}
+
 func TestTagSettingsAddAndDeleteTag(t *testing.T) {
 	app := NewApp()
 	seedProfile(app)

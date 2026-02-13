@@ -215,7 +215,7 @@ func newAppWithDB(db *sql.DB) (*App, error) {
 	}).ParseFS(embeddedFiles, "templates/*.html"))
 	mux := http.NewServeMux()
 
-	app := &App{templates: tpls, mux: mux, db: db, nextID: 1, activeUserID: defaultUserID}
+	app := &App{templates: tpls, mux: mux, db: db, nextID: 1, activeUserID: defaultUserID, tagCatalog: append([]string(nil), defaultTagOptions...)}
 	if err := app.loadStateFromDB(app.activeUserID); err != nil {
 		return nil, err
 	}
@@ -1768,10 +1768,15 @@ func categoriesFromTags(rawTags string) []string {
 }
 
 func availableTagOptions(items []Item, catalog []string) []string {
-	options := make([]string, len(defaultTagOptions))
-	copy(options, defaultTagOptions)
-	for _, tag := range catalog {
-		options = append(options, strings.TrimSpace(tag))
+	options := make([]string, 0, len(catalog)+len(items))
+	if len(catalog) == 0 {
+		options = append(options, defaultTagOptions...)
+	} else {
+		for _, tag := range catalog {
+			if trimmed := strings.TrimSpace(tag); trimmed != "" {
+				options = append(options, trimmed)
+			}
+		}
 	}
 
 	seen := map[string]struct{}{}

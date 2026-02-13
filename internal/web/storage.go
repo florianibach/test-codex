@@ -103,6 +103,7 @@ CREATE INDEX IF NOT EXISTS idx_items_status_allowed ON items(status, purchase_al
 
 func (a *App) loadStateFromDB(userID string) error {
 	if a.db == nil {
+		a.tagCatalog = append([]string(nil), defaultTagOptions...)
 		return nil
 	}
 
@@ -121,6 +122,7 @@ func (a *App) loadStateFromDB(userID string) error {
 	var hourlyWage, currency, defaultPreset, defaultCustomHours, ntfyEndpoint, ntfyTopic, tagCatalogRaw string
 	switch err := row.Scan(&hourlyWage, &currency, &defaultPreset, &defaultCustomHours, &ntfyEndpoint, &ntfyTopic, &tagCatalogRaw); {
 	case errors.Is(err, sql.ErrNoRows):
+		a.tagCatalog = append([]string(nil), defaultTagOptions...)
 	case err != nil:
 		return fmt.Errorf("load profile: %w", err)
 	default:
@@ -137,6 +139,9 @@ func (a *App) loadStateFromDB(userID string) error {
 		a.ntfyURL = ntfyEndpoint
 		a.ntfyTopic = ntfyTopic
 		a.tagCatalog = parseTagCatalog(tagCatalogRaw)
+		if len(a.tagCatalog) == 0 {
+			a.tagCatalog = append([]string(nil), defaultTagOptions...)
+		}
 	}
 
 	rows, err := a.db.Query(`
@@ -274,6 +279,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 func (a *App) updateItemLocked(item Item) error {
 	userID := a.currentUserIDLocked()
 	if a.db == nil {
+		a.tagCatalog = append([]string(nil), defaultTagOptions...)
 		return nil
 	}
 
@@ -306,6 +312,7 @@ WHERE id = ? AND user_id = ?
 func (a *App) deleteItemLocked(itemID int) error {
 	userID := a.currentUserIDLocked()
 	if a.db == nil {
+		a.tagCatalog = append([]string(nil), defaultTagOptions...)
 		return nil
 	}
 
@@ -319,6 +326,7 @@ func (a *App) deleteItemLocked(itemID int) error {
 func (a *App) updateItemStatusLocked(itemID int, status string) error {
 	userID := a.currentUserIDLocked()
 	if a.db == nil {
+		a.tagCatalog = append([]string(nil), defaultTagOptions...)
 		return nil
 	}
 
@@ -332,6 +340,7 @@ func (a *App) updateItemStatusLocked(itemID int, status string) error {
 func (a *App) markNtfyAttemptedLocked(itemID int) error {
 	userID := a.currentUserIDLocked()
 	if a.db == nil {
+		a.tagCatalog = append([]string(nil), defaultTagOptions...)
 		return nil
 	}
 
@@ -345,6 +354,7 @@ func (a *App) markNtfyAttemptedLocked(itemID int) error {
 func (a *App) updatePromotedItemLocked(item Item) error {
 	userID := a.currentUserIDLocked()
 	if a.db == nil {
+		a.tagCatalog = append([]string(nil), defaultTagOptions...)
 		return nil
 	}
 
@@ -357,6 +367,7 @@ func (a *App) updatePromotedItemLocked(item Item) error {
 
 func (a *App) deleteProfileLocked(userID string) error {
 	if a.db == nil {
+		a.tagCatalog = append([]string(nil), defaultTagOptions...)
 		return nil
 	}
 
@@ -383,6 +394,7 @@ func (a *App) deleteProfileLocked(userID string) error {
 
 func (a *App) renameProfileLocked(oldUserID, newUserID string) error {
 	if a.db == nil {
+		a.tagCatalog = append([]string(nil), defaultTagOptions...)
 		return nil
 	}
 

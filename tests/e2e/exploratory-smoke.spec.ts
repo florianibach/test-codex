@@ -163,6 +163,7 @@ test('R1-007 tags use badge selection and can be managed in dedicated settings',
   page.once('dialog', (dialog) => dialog.accept());
   await page.locator('form:has(input[name="tag"][value="Gift"]) button').click();
   await expect(page.getByText('Tag deleted.')).toBeVisible();
+  await expect(page.locator('span.status-filter-badge', { hasText: 'Gift' })).toHaveCount(0);
 });
 
 test('dashboard search matches title and link fields explicitly', async ({ page }) => {
