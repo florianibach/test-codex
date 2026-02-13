@@ -716,3 +716,41 @@ test('R1-006.1: delete profile removes it and redirects to profile switch', asyn
   await expect(page.getByRole('button', { name: profileDelete })).toHaveCount(0);
   await expect(page.getByRole('button', { name: profileKeep })).toBeVisible();
 });
+
+
+test('R1-006.1: cancel delete keeps profile and data unchanged', async ({ page }) => {
+  const profileKeep = uniqueName('KeepProfileCancel');
+  const profileCancel = uniqueName('CancelProfile');
+  const itemTitle = uniqueTitle('cancel-delete-item');
+
+  await page.goto('/switch-profile');
+  await page.getByLabel('Profile name').fill(profileKeep);
+  await page.getByRole('button', { name: 'Create' }).click();
+  await saveProfile(page, '26', 'EUR');
+
+  await page.goto('/switch-profile');
+  await page.getByLabel('Profile name').fill(profileCancel);
+  await page.getByRole('button', { name: 'Create' }).click();
+  await saveProfile(page, '31', '$');
+
+  await page.goto('/items/new');
+  await page.getByLabel('Title *').fill(itemTitle);
+  await page.getByRole('button', { name: 'Add to waitlist' }).click();
+  await expect(page.locator('li.list-group-item').filter({ hasText: itemTitle }).first()).toBeVisible();
+
+  await page.goto('/settings/profile');
+  page.once('dialog', async (dialog) => {
+    expect(dialog.message()).toContain('Delete this profile');
+    await dialog.dismiss();
+  });
+
+  await page.getByRole('button', { name: 'Delete profile' }).click();
+  await expect(page).toHaveURL(/\/settings\/profile/);
+
+  await page.goto('/switch-profile');
+  await expect(page.getByRole('button', { name: profileCancel })).toBeVisible();
+
+  await page.getByRole('button', { name: profileCancel }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.locator('li.list-group-item').filter({ hasText: itemTitle }).first()).toBeVisible();
+});
