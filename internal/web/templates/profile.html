@@ -17,7 +17,12 @@
         <div class="vstack gap-3">
           <div>
             <label for="hourly_wage" class="form-label">Net hourly wage</label>
+            <p class="form-text mb-1">Currency symbol/code for all money fields (default: €).</p>
             <input id="hourly_wage" name="hourly_wage" type="number" min="0.01" step="0.01" inputmode="decimal" class="form-control" placeholder="e.g. 25" value="{{.ProfileHourly}}" required />
+          </div>
+          <div>
+            <label for="currency" class="form-label">Currency</label>
+            <input id="currency" name="currency" type="text" class="form-control" placeholder="€, CHF, $, EUR" value="{{.Currency}}" />
           </div>
           <div>
             <label for="default_wait_preset" class="form-label">Default wait time</label>

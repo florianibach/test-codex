@@ -20,6 +20,7 @@ func TestNewAppWithSQLiteCreatesSchemaAndPersistsData(t *testing.T) {
 	profileForm := url.Values{}
 	profileForm.Set("hourly_wage", "35")
 	profileForm.Set("default_wait_preset", "7d")
+	profileForm.Set("currency", "EUR")
 	profileReq := httptest.NewRequest(http.MethodPost, "/settings/profile", strings.NewReader(profileForm.Encode()))
 	profileReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	profileRR := httptest.NewRecorder()
@@ -61,6 +62,9 @@ func TestNewAppWithSQLiteCreatesSchemaAndPersistsData(t *testing.T) {
 	}
 	if body := settingsRR.Body.String(); !strings.Contains(body, "value=\"35\"") {
 		t.Fatalf("expected persisted profile hourly wage after reload")
+	}
+	if body := settingsRR.Body.String(); !strings.Contains(body, "value=\"EUR\"") {
+		t.Fatalf("expected persisted profile currency after reload")
 	}
 }
 

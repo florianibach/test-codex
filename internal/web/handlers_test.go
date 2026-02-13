@@ -1525,7 +1525,7 @@ func TestDeleteItemRemovesItFromHomeAndInsights(t *testing.T) {
 	if !strings.Contains(body, ">1</p>") {
 		t.Fatalf("expected skipped count to reflect remaining item")
 	}
-	if !strings.Contains(body, ">12.50</p>") {
+	if !strings.Contains(body, "€ 12.50</p>") {
 		t.Fatalf("expected saved total to exclude deleted item")
 	}
 }
@@ -1678,5 +1678,109 @@ func TestDeleteItemRequiresPost(t *testing.T) {
 
 	if rr.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected 405, got %d", rr.Code)
+	}
+}
+
+func TestProfileCurrencyDefaultsToEuro(t *testing.T) {
+	app := NewApp()
+
+	req := httptest.NewRequest(http.MethodGet, "/settings/profile", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if body := rr.Body.String(); !strings.Contains(body, "id=\"currency\"") || !strings.Contains(body, "value=\"€\"") {
+		t.Fatalf("expected default euro currency in profile form")
+	}
+}
+
+func TestProfileCurrencyPersistsAndRendersAcrossViews(t *testing.T) {
+	app := NewApp()
+
+	form := url.Values{}
+	form.Set("hourly_wage", "30")
+	form.Set("currency", "CHF")
+	req := httptest.NewRequest(http.MethodPost, "/settings/profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", rr.Code)
+	}
+
+	itemForm := url.Values{}
+	itemForm.Set("title", "Monitor")
+	itemForm.Set("price", "199.90")
+	itemReq := httptest.NewRequest(http.MethodPost, "/items/new", strings.NewReader(itemForm.Encode()))
+	itemReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	itemRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(itemRR, itemReq)
+	if itemRR.Code != http.StatusSeeOther {
+		t.Fatalf("expected item create redirect, got %d", itemRR.Code)
+	}
+
+	homeReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	homeRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(homeRR, homeReq)
+	if homeRR.Code != http.StatusOK {
+		t.Fatalf("expected home 200, got %d", homeRR.Code)
+	}
+	if body := homeRR.Body.String(); !strings.Contains(body, "CHF 199.90") {
+		t.Fatalf("expected dashboard item price to include currency")
+	}
+
+	newReq := httptest.NewRequest(http.MethodGet, "/items/new", nil)
+	newRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(newRR, newReq)
+	if newRR.Code != http.StatusOK {
+		t.Fatalf("expected new item form 200, got %d", newRR.Code)
+	}
+	if body := newRR.Body.String(); !strings.Contains(body, "Currency: CHF") {
+		t.Fatalf("expected item form to include profile currency")
+	}
+
+	app.mu.Lock()
+	app.items[0].Status = "Skipped"
+	app.items[0].HasPriceValue = true
+	app.items[0].PriceValue = 199.9
+	app.mu.Unlock()
+
+	insightsReq := httptest.NewRequest(http.MethodGet, "/insights", nil)
+	insightsRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(insightsRR, insightsReq)
+	if insightsRR.Code != http.StatusOK {
+		t.Fatalf("expected insights 200, got %d", insightsRR.Code)
+	}
+	if body := insightsRR.Body.String(); !strings.Contains(body, "CHF 199.90") {
+		t.Fatalf("expected insights saved total to include currency")
+	}
+}
+
+func TestProfileCurrencyFallsBackToEuroWhenEmpty(t *testing.T) {
+	app := NewApp()
+
+	form := url.Values{}
+	form.Set("hourly_wage", "30")
+	form.Set("currency", "")
+	req := httptest.NewRequest(http.MethodPost, "/settings/profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", rr.Code)
+	}
+
+	profileReq := httptest.NewRequest(http.MethodGet, "/settings/profile", nil)
+	profileRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(profileRR, profileReq)
+	if profileRR.Code != http.StatusOK {
+		t.Fatalf("expected profile 200, got %d", profileRR.Code)
+	}
+	if body := profileRR.Body.String(); !strings.Contains(body, "value=\"€\"") {
+		t.Fatalf("expected empty currency to fallback to euro")
 	}
 }
