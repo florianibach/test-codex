@@ -2375,6 +2375,9 @@ func TestHomeWithoutCookieSelectsSmallestProfileID(t *testing.T) {
 	if got := app.activeProfileName(); got != "Zed" {
 		t.Fatalf("expected smallest id profile Zed to be selected, got %q", got)
 	}
+	if got := rr.Header().Get("Set-Cookie"); !strings.Contains(got, "active_profile=Zed") {
+		t.Fatalf("expected active_profile cookie for selected profile, got %q", got)
+	}
 }
 
 func TestActivateProfileFromRequestWithoutProfilesLeavesNoActiveProfile(t *testing.T) {
