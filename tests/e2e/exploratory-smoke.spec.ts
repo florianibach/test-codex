@@ -58,6 +58,23 @@ test('dashboard filter panel is collapsed by default and opens on demand', async
   await expect(filterPanel).toHaveAttribute('open', '');
 });
 
+
+test('dashboard all status shortcut selects all filters and keeps panel open', async ({ page }) => {
+  await ensureProfileConfigured(page);
+
+  await page.goto('/');
+  const filterPanel = page.locator('details.mb-3').first();
+  await filterPanel.locator('summary').click();
+
+  await page.getByRole('button', { name: 'All' }).click();
+
+  await expect(page).toHaveURL(/status=Waiting/);
+  await expect(page).toHaveURL(/status=Ready\+to\+buy/);
+  await expect(page).toHaveURL(/status=Bought/);
+  await expect(page).toHaveURL(/status=Skipped/);
+  await expect(page.locator('details.mb-3').first()).toHaveAttribute('open', '');
+});
+
 test('dashboard search, tag filter, and price sort work together', async ({ page }) => {
   await ensureProfileConfigured(page);
 
@@ -85,7 +102,7 @@ test('dashboard search, tag filter, and price sort work together', async ({ page
   await page.getByLabel('Search').fill(searchToken);
   await page.getByLabel('Tag').fill('tech');
   await page.getByLabel('Sort').selectOption('price_asc');
-  await page.getByRole('button', { name: 'Apply' }).click();
+  await expect(page).toHaveURL(/sort=price_asc/);
 
   await expect(page).toHaveURL(/\/?q=/);
   await expect(page).toHaveURL(/tag=tech/);
@@ -125,13 +142,13 @@ test('dashboard search matches title and link fields explicitly', async ({ page 
   await filterPanel.locator('summary').click();
 
   await page.getByLabel('Search').fill(titleMatch);
-  await page.getByRole('button', { name: 'Apply' }).click();
+  await expect(page).toHaveURL(/q=/);
 
   await expect(page.locator('li.list-group-item').filter({ hasText: titleMatch })).toHaveCount(1);
   await expect(page.locator('li.list-group-item').filter({ hasText: neutralTitle })).toHaveCount(0);
 
   await page.getByLabel('Search').fill(linkMatch);
-  await page.getByRole('button', { name: 'Apply' }).click();
+  await expect(page).toHaveURL(/q=/);
 
   await expect(page.locator('li.list-group-item').filter({ hasText: neutralTitle })).toHaveCount(1);
   await expect(page.locator('li.list-group-item').filter({ hasText: titleMatch })).toHaveCount(0);
@@ -191,12 +208,16 @@ test('dashboard keeps combined search, status filter and sort consistent after r
   const filterPanel = page.locator('details.mb-3').first();
   await filterPanel.locator('summary').click();
   await page.getByLabel('Search').fill(token);
-  await page.getByLabel('Waiting').uncheck();
-  await page.getByLabel('Ready to buy').check();
-  await page.getByLabel('Bought').uncheck();
-  await page.getByLabel('Skipped').uncheck();
+  await expect(page).toHaveURL(/q=/);
+
+  await setStatusFilter(page, 'status-waiting', false);
+  await setStatusFilter(page, 'status-ready', true);
+  await setStatusFilter(page, 'status-bought', false);
+  await setStatusFilter(page, 'status-skipped', false);
+  await expect(page).toHaveURL(/status=Ready\+to\+buy/);
+
   await page.getByLabel('Sort').selectOption('newest');
-  await page.getByRole('button', { name: 'Apply' }).click();
+  await expect(page).toHaveURL(/sort=newest/);
 
   await expect(page.locator('li.list-group-item').filter({ hasText: includeTitle })).toHaveCount(1);
   await expect(page.locator('li.list-group-item').filter({ hasText: excludeTitle })).toHaveCount(0);
@@ -388,8 +409,8 @@ test('editing a skipped item with future wait time reopens it as waiting', async
   await readyRow.getByRole('button', { name: 'Mark as skipped' }).click();
 
   await page.locator('details.mb-3 summary').click();
-  await page.getByLabel('Skipped').check();
-  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.locator("label[for='status-skipped']").click();
+  await expect(page).toHaveURL(/status=Skipped/);
 
   const skippedRow = page.locator('li.list-group-item').filter({ hasText: title }).first();
   await expect(skippedRow.locator('.badge').first()).toHaveText('Skipped');
@@ -477,8 +498,8 @@ test('delete flow supports cancel and removes item from dashboard and insights o
   await readyRow.getByRole('button', { name: 'Mark as skipped' }).click();
 
   await page.locator('details.mb-3 summary').click();
-  await page.getByLabel('Skipped').check();
-  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.locator("label[for='status-skipped']").click();
+  await expect(page).toHaveURL(/status=Skipped/);
 
   const row = page.locator('li.list-group-item').filter({ hasText: title }).first();
   await expect(row.locator('.badge').first()).toHaveText('Skipped');
@@ -505,6 +526,17 @@ test('delete flow supports cancel and removes item from dashboard and insights o
 
 
 
+
+
+async function setStatusFilter(page: Page, inputId: string, shouldBeChecked: boolean) {
+  const statusInput = page.locator(`#${inputId}`);
+  const isChecked = await statusInput.isChecked();
+  if (isChecked === shouldBeChecked) {
+    return;
+  }
+
+  await page.locator(`label[for='${inputId}']`).click();
+}
 
 async function waitForItemStatus(page: Page, title: string, status: string) {
   await page.goto('/');

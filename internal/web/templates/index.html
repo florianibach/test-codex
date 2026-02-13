@@ -20,20 +20,29 @@
 
     <details class="mb-3" {{if .HasActiveFilter}}open{{end}}>
       <summary class="btn btn-outline-secondary btn-sm">Search, filter & sort</summary>
-      <form method="get" action="/" class="row g-2 mt-2">
+      <form method="get" action="/" class="row g-2 mt-2" data-auto-submit-filter="true">
         <div class="col-12 col-md-4">
           <label for="q" class="form-label">Search</label>
           <input id="q" name="q" class="form-control" value="{{.SearchQuery}}" placeholder="Title, note, link, tags" />
         </div>
-        <fieldset class="col-12 col-md-5">
-          <legend class="form-label mb-1">Status</legend>
-          <div class="d-flex flex-wrap gap-2">
-            <label class="form-check-label small"><input class="form-check-input me-1" type="checkbox" name="status" value="Waiting" {{if index .SelectedStatus "Waiting"}}checked{{end}} />Waiting</label>
-            <label class="form-check-label small"><input class="form-check-input me-1" type="checkbox" name="status" value="Ready to buy" {{if index .SelectedStatus "Ready to buy"}}checked{{end}} />Ready to buy</label>
-            <label class="form-check-label small"><input class="form-check-input me-1" type="checkbox" name="status" value="Bought" {{if index .SelectedStatus "Bought"}}checked{{end}} />Bought</label>
-            <label class="form-check-label small"><input class="form-check-input me-1" type="checkbox" name="status" value="Skipped" {{if index .SelectedStatus "Skipped"}}checked{{end}} />Skipped</label>
+        <div class="col-12 col-md-5">
+          <label class="form-label mb-1">Status</label>
+          <div class="status-filter-group d-flex flex-wrap gap-2" role="group" aria-label="Status">
+            <button class="btn btn-sm status-filter-badge status-filter-all" type="button" data-status-all="true" aria-pressed="false">All</button>
+
+            <input class="status-filter-input" id="status-waiting" type="checkbox" name="status" value="Waiting" {{if index .SelectedStatus "Waiting"}}checked{{end}} />
+            <label class="btn btn-sm status-filter-badge" for="status-waiting">Waiting</label>
+
+            <input class="status-filter-input" id="status-ready" type="checkbox" name="status" value="Ready to buy" {{if index .SelectedStatus "Ready to buy"}}checked{{end}} />
+            <label class="btn btn-sm status-filter-badge" for="status-ready">Ready to buy</label>
+
+            <input class="status-filter-input" id="status-bought" type="checkbox" name="status" value="Bought" {{if index .SelectedStatus "Bought"}}checked{{end}} />
+            <label class="btn btn-sm status-filter-badge" for="status-bought">Bought</label>
+
+            <input class="status-filter-input" id="status-skipped" type="checkbox" name="status" value="Skipped" {{if index .SelectedStatus "Skipped"}}checked{{end}} />
+            <label class="btn btn-sm status-filter-badge" for="status-skipped">Skipped</label>
           </div>
-        </fieldset>
+        </div>
         <div class="col-6 col-md-2">
           <label for="tag" class="form-label">Tag</label>
           <input id="tag" name="tag" class="form-control" value="{{.TagFilter}}" placeholder="e.g. tech" />
@@ -49,7 +58,6 @@
           </select>
         </div>
         <div class="col-12 d-flex gap-2">
-          <button type="submit" class="btn btn-outline-primary btn-sm">Apply</button>
           <a href="/" class="btn btn-outline-secondary btn-sm">Reset</a>
         </div>
       </form>
@@ -136,6 +144,73 @@
 
       node.textContent = formatter.format(parsed);
     });
+
+    var filterForm = document.querySelector("form[data-auto-submit-filter='true']");
+    if (!filterForm) {
+      return;
+    }
+
+    var debounceTimer;
+    var submitFilterForm = function () {
+      if (typeof filterForm.requestSubmit === "function") {
+        filterForm.requestSubmit();
+        return;
+      }
+      filterForm.submit();
+    };
+
+    var statusInputs = Array.prototype.slice.call(filterForm.querySelectorAll("input[name='status']"));
+    var allStatusesButton = filterForm.querySelector("button[data-status-all='true']");
+
+    var allStatusesSelected = function () {
+      return statusInputs.length > 0 && statusInputs.every(function (statusInput) {
+        return statusInput.checked;
+      });
+    };
+
+    var syncAllStatusesButton = function () {
+      if (!allStatusesButton) {
+        return;
+      }
+      var allSelected = allStatusesSelected();
+      allStatusesButton.classList.toggle("is-active", allSelected);
+      allStatusesButton.setAttribute("aria-pressed", allSelected ? "true" : "false");
+    };
+
+    statusInputs.forEach(function (statusInput) {
+      statusInput.addEventListener("change", function () {
+        syncAllStatusesButton();
+        submitFilterForm();
+      });
+    });
+
+    if (allStatusesButton) {
+      allStatusesButton.addEventListener("click", function () {
+        statusInputs.forEach(function (statusInput) {
+          statusInput.checked = true;
+        });
+        syncAllStatusesButton();
+        submitFilterForm();
+      });
+    }
+
+    syncAllStatusesButton();
+
+    ["#sort", "#tag"].forEach(function (selector) {
+      var field = filterForm.querySelector(selector);
+      if (!field) {
+        return;
+      }
+      field.addEventListener("change", submitFilterForm);
+    });
+
+    var searchField = filterForm.querySelector("#q");
+    if (searchField) {
+      searchField.addEventListener("input", function () {
+        window.clearTimeout(debounceTimer);
+        debounceTimer = window.setTimeout(submitFilterForm, 250);
+      });
+    }
   })();
 </script>
 {{end}}
