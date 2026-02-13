@@ -1764,8 +1764,8 @@ func TestProfileCurrencyPersistsAndRendersAcrossViews(t *testing.T) {
 	if newRR.Code != http.StatusOK {
 		t.Fatalf("expected new item form 200, got %d", newRR.Code)
 	}
-	if body := newRR.Body.String(); !strings.Contains(body, "Currency: CHF") {
-		t.Fatalf("expected item form to include profile currency")
+	if body := newRR.Body.String(); !strings.Contains(body, "Price (CHF)") {
+		t.Fatalf("expected item form to show currency in price label")
 	}
 
 	app.mu.Lock()
