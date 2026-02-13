@@ -104,11 +104,11 @@ test('R1-008 monkeyish: currency flips keep money rendering stable across app ar
     await expect(page.getByText('Profile saved.')).toBeVisible();
 
     await page.goto('/items/new');
-    await expect(page.getByText(`Currency: ${selectedCurrency}`)).toBeVisible();
+    await expect(page.getByText(`Price (${selectedCurrency})`)).toBeVisible();
 
     const title = uniqueTitle(`R1-008 monkeyish ${i}`);
     await page.getByLabel('Title *').fill(title);
-    await page.getByLabel('Price').fill(String((next() % 90) + 10));
+    await page.getByLabel(`Price (${selectedCurrency})`).fill(String((next() % 90) + 10));
     await page.getByLabel('Wait time').selectOption('custom');
     await page.getByLabel('Custom hours').fill('0.002');
     await page.getByRole('button', { name: 'Add to waitlist' }).click();

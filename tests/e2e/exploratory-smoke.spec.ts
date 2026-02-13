@@ -588,11 +588,11 @@ test('R1-008 currency from profile is used in forms, list and insights with euro
   await expect(page.getByText('Profile saved.')).toBeVisible();
 
   await page.goto('/items/new');
-  await expect(page.getByText('Currency: CHF')).toBeVisible();
+  await expect(page.getByText('Price (CHF)')).toBeVisible();
 
   const title = uniqueTitle('R1-008 currency');
   await page.getByLabel('Title *').fill(title);
-  await page.getByLabel('Price').fill('88.50');
+  await page.getByLabel('Price (CHF)').fill('88.50');
   await page.getByLabel('Wait time').selectOption('custom');
   await page.getByLabel('Custom hours').fill('0.002');
   await page.getByRole('button', { name: 'Add to waitlist' }).click();
