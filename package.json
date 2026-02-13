@@ -5,7 +5,6 @@
   "scripts": {
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright install --with-deps chromium && playwright test tests/e2e/exploratory-smoke.spec.ts",
-    "test:e2e:r1-006": "playwright install --with-deps chromium && playwright test tests/e2e/exploratory-smoke.spec.ts --grep \"R1-006\"",
     "setup:e2e:deps": "playwright install --with-deps chromium",
     "test:e2e:monkeyish": "playwright install --with-deps chromium && playwright test tests/e2e/monkeyish.spec.ts"
   },
