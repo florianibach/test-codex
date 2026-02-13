@@ -1,0 +1,34 @@
+{{define "tags_content"}}
+<section class="card shadow-sm mb-4">
+  <div class="card-body">
+    <h1 class="h3 mb-1">Tag settings</h1>
+    <p class="text-secondary mb-3">Manage the tag badges available in item forms and filters.</p>
+
+    {{if .Feedback}}
+    <div class="alert alert-success py-2" role="alert">{{.Feedback}}</div>
+    {{end}}
+    {{if .Error}}
+    <div class="alert alert-danger py-2" role="alert">{{.Error}}</div>
+    {{end}}
+
+    <form method="post" action="/settings/tags" class="d-flex gap-2 wrap-sm mb-3">
+      <input type="hidden" name="action" value="add" />
+      <input id="tag" name="tag" class="form-control" placeholder="Add new tag" value="{{.NewTag}}" />
+      <button class="btn btn-primary" type="submit">Add tag</button>
+    </form>
+
+    <div class="vstack gap-2" aria-label="Managed tags">
+      {{range $idx, $tag := .TagOptions}}
+      <div class="d-flex align-items-center justify-content-between wrap-sm" style="border:1px solid var(--border-color); border-radius:.5rem; padding:.4rem .55rem;">
+        <span class="btn btn-sm status-filter-badge">{{$tag}}</span>
+        <form method="post" action="/settings/tags" onsubmit="return confirm('Delete tag {{$tag}} from all items?');">
+          <input type="hidden" name="action" value="delete" />
+          <input type="hidden" name="tag" value="{{$tag}}" />
+          <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+        </form>
+      </div>
+      {{end}}
+    </div>
+  </div>
+</section>
+{{end}}

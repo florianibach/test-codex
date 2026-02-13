@@ -53,8 +53,14 @@
             <input id="link" name="link" class="form-control" placeholder="https://..." value="{{.FormValues.Link}}" />
           </div>
           <div>
-            <label for="tags" class="form-label">Tags</label>
-            <input id="tags" name="tags" class="form-control" placeholder="Tech, Audio" value="{{.FormValues.Tags}}" />
+            <label class="form-label mb-1">Tags</label>
+            <div class="status-filter-group d-flex flex-wrap gap-2" role="group" aria-label="Tags">
+              {{range $idx, $tag := .TagOptions}}
+              <input class="status-filter-input" id="item-tag-{{$idx}}" type="checkbox" name="tags" value="{{$tag}}" {{if index $.SelectedTags $tag}}checked{{end}} />
+              <label class="btn btn-sm status-filter-badge" for="item-tag-{{$idx}}">{{$tag}}</label>
+              {{end}}
+            </div>
+            <div class="form-text">Manage available tags in <a href="/settings/tags">Tag settings</a>.</div>
           </div>
           <div>
             <label for="note" class="form-label">Note</label>

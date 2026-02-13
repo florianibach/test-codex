@@ -16,6 +16,7 @@
         <a class="nav-link {{if eq .CurrentPath "/items/new"}}active{{end}}" href="/items/new">Add item</a>
         <a class="nav-link {{if eq .CurrentPath "/insights"}}active{{end}}" href="/insights">Insights</a>
         <a class="nav-link {{if eq .CurrentPath "/settings/profile"}}active{{end}}" href="/settings/profile">Settings</a>
+        <a class="nav-link {{if eq .CurrentPath "/settings/tags"}}active{{end}}" href="/settings/tags">Tags</a>
         <a class="nav-link {{if eq .CurrentPath "/about"}}active{{end}}" href="/about">About</a>
       </nav>
       {{if .ActiveProfile}}<span class="small text-secondary">Profile: {{.ActiveProfile}}</span>{{end}}
@@ -35,6 +36,8 @@
       {{template "about_content" .}}
     {{else if eq .ContentTemplate "switch_profile_content"}}
       {{template "switch_profile_content" .}}
+    {{else if eq .ContentTemplate "tags_content"}}
+      {{template "tags_content" .}}
     {{end}}
   </main>
 

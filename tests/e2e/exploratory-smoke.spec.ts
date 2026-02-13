@@ -96,26 +96,26 @@ test('dashboard search, tag filter, and price sort work together', async ({ page
   await page.getByLabel('Title *').fill(firstTitle);
   await page.getByLabel('Price').fill('200');
   await page.getByLabel('Note').fill(searchToken);
-  await page.getByLabel('Tags').fill('tech');
+  await page.locator('#item-tag-0 + label, label[for^="item-tag-"]').filter({ hasText: 'Tech' }).first().click();
   await page.getByRole('button', { name: 'Add to waitlist' }).click();
 
   await page.goto('/items/new');
   await page.getByLabel('Title *').fill(secondTitle);
   await page.getByLabel('Price').fill('50');
   await page.getByLabel('Note').fill(searchToken);
-  await page.getByLabel('Tags').fill('tech');
+  await page.locator('#item-tag-0 + label, label[for^="item-tag-"]').filter({ hasText: 'Tech' }).first().click();
   await page.getByRole('button', { name: 'Add to waitlist' }).click();
 
   const filterPanel = page.locator('details.mb-3').first();
   await filterPanel.locator('summary').click();
 
   await page.getByLabel('Search').fill(searchToken);
-  await page.getByLabel('Tag').fill('tech');
+  await page.locator('details.mb-3').first().locator('label.status-filter-badge').filter({ hasText: 'Tech' }).first().click();
   await page.getByLabel('Sort').selectOption('price_asc');
   await expect(page).toHaveURL(/sort=price_asc/);
 
   await expect(page).toHaveURL(/\/?q=/);
-  await expect(page).toHaveURL(/tag=tech/);
+  await expect(page).toHaveURL(/tag=Tech/);
   await expect(page).toHaveURL(/sort=price_asc/);
 
   const rows = page.locator('li.list-group-item');
@@ -130,6 +130,41 @@ test('dashboard search, tag filter, and price sort work together', async ({ page
   await expect(page.locator('details.mb-3').first()).toHaveAttribute('open', '');
 });
 
+
+
+
+test('R1-007 tags use badge selection and can be managed in dedicated settings', async ({ page }) => {
+  await ensureProfileConfigured(page);
+
+  const title = uniqueTitle('R1-007 tagged');
+
+  await page.goto('/settings/tags');
+  await page.locator('input[name="tag"]').first().fill('Gift');
+  await page.getByRole('button', { name: 'Add tag' }).click();
+  await expect(page.getByText('Tag added.')).toBeVisible();
+
+  await page.goto('/items/new');
+  await page.getByLabel('Title *').fill(title);
+  await page.locator('label.status-filter-badge').filter({ hasText: 'Tech' }).first().click();
+  await page.locator('label.status-filter-badge').filter({ hasText: 'Gift' }).first().click();
+  await page.getByRole('button', { name: 'Add to waitlist' }).click();
+
+  const row = page.locator('li.list-group-item').filter({ hasText: title }).first();
+  await expect(row).toContainText(/Tags: .*Tech/);
+  await expect(row).toContainText(/Tags: .*Gift/);
+
+  const filterPanel = page.locator('details.mb-3').first();
+  await filterPanel.locator('summary').click();
+  await page.locator('details.mb-3').first().locator('label.status-filter-badge').filter({ hasText: 'Gift' }).first().click();
+  await expect(page).toHaveURL(/tag=Gift/);
+  await expect(page.locator('li.list-group-item').filter({ hasText: title })).toHaveCount(1);
+
+  await page.goto('/settings/tags');
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.locator('form:has(input[name="tag"][value="Gift"]) button').click();
+  await expect(page.getByText('Tag deleted.')).toBeVisible();
+  await expect(page.locator('span.status-filter-badge', { hasText: 'Gift' })).toHaveCount(0);
+});
 
 test('dashboard search matches title and link fields explicitly', async ({ page }) => {
   await ensureProfileConfigured(page);

@@ -214,6 +214,7 @@ details > summary { cursor: pointer; }
 
 .status-filter-group {
   align-items: center;
+  flex-wrap: wrap;
   border: 1px solid #c8d4e2;
   border-radius: .5rem;
   padding: .5rem;
@@ -264,6 +265,7 @@ details > summary { cursor: pointer; }
 
 .d-inline { display: inline; }
 .flex-column { flex-direction: column; }
+.flex-wrap { flex-wrap: wrap; }
 .gap-1 { gap: .25rem; }
 .gap-2 { gap: .5rem; }
 .mt-2 { margin-top: .5rem; }

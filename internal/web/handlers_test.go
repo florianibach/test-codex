@@ -83,6 +83,22 @@ func TestInsightsRouteGet(t *testing.T) {
 	}
 }
 
+func TestTagSettingsRouteGet(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+	req := httptest.NewRequest(http.MethodGet, "/settings/tags", nil)
+	rr := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if body := rr.Body.String(); !strings.Contains(body, "Tag settings") {
+		t.Fatalf("expected tag settings page content")
+	}
+}
+
 func TestItemsNewRouteGet(t *testing.T) {
 	app := NewApp()
 	req := httptest.NewRequest(http.MethodGet, "/items/new", nil)
@@ -328,6 +344,146 @@ func TestHomeFiltersBySearchStatusAndTag(t *testing.T) {
 	}
 	if strings.Contains(body, "Shoes") {
 		t.Fatalf("did not expect non-matching item to be present")
+	}
+}
+
+func TestItemFormShowsTagBadgeOptions(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+
+	req := httptest.NewRequest(http.MethodGet, "/items/new", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "Manage available tags in") {
+		t.Fatalf("expected tags badge inputs in item form")
+	}
+
+}
+
+func TestCreateItemStoresSelectedTagBadges(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+
+	form := url.Values{}
+	form.Set("title", "Tagged item")
+	form.Add("tags", "Tech")
+	form.Add("tags", "Audio")
+
+	req := httptest.NewRequest(http.MethodPost, "/items/new", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", rr.Code)
+	}
+
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if len(app.items) != 1 {
+		t.Fatalf("expected one item, got %d", len(app.items))
+	}
+	if got := app.items[0].Tags; got != "Tech, Audio" {
+		t.Fatalf("expected merged tags, got %q", got)
+	}
+}
+
+func TestHomeTagFilterUsesDropdownExactTagMatch(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+
+	now := time.Now()
+	app.mu.Lock()
+	app.items = append(app.items,
+		Item{ID: 1, Title: "Phone", Tags: "Tech", Status: "Ready to buy", CreatedAt: now.Add(-2 * time.Hour), PurchaseAllowedAt: now.Add(-time.Hour)},
+		Item{ID: 2, Title: "Book", Tags: "Biotech", Status: "Ready to buy", CreatedAt: now.Add(-time.Hour), PurchaseAllowedAt: now.Add(-time.Hour)},
+	)
+	app.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/?tag=Tech", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "Phone") {
+		t.Fatalf("expected exact tag match item to be present")
+	}
+	if strings.Contains(body, "Book") {
+		t.Fatalf("did not expect partial tag match item to be present")
+	}
+}
+
+func TestTagSettingsDeleteDefaultTagRemovesItFromCatalogAndFilterOptions(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+
+	delForm := url.Values{}
+	delForm.Set("action", "delete")
+	delForm.Set("tag", "Tech")
+	delReq := httptest.NewRequest(http.MethodPost, "/settings/tags", strings.NewReader(delForm.Encode()))
+	delReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	delRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(delRR, delReq)
+	if delRR.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", delRR.Code)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/settings/tags", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if strings.Contains(rr.Body.String(), ">Tech</span>") {
+		t.Fatalf("expected deleted default tag to not be listed")
+	}
+}
+
+func TestTagSettingsAddAndDeleteTag(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+
+	addForm := url.Values{}
+	addForm.Set("action", "add")
+	addForm.Set("tag", "Gift")
+	addReq := httptest.NewRequest(http.MethodPost, "/settings/tags", strings.NewReader(addForm.Encode()))
+	addReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(addRR, addReq)
+	if addRR.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", addRR.Code)
+	}
+
+	app.mu.Lock()
+	app.items = append(app.items, Item{ID: 1, Title: "Keep", Tags: "Gift, Tech", Status: "Waiting", CreatedAt: time.Now(), PurchaseAllowedAt: time.Now().Add(time.Hour)})
+	app.mu.Unlock()
+
+	delForm := url.Values{}
+	delForm.Set("action", "delete")
+	delForm.Set("tag", "Gift")
+	delReq := httptest.NewRequest(http.MethodPost, "/settings/tags", strings.NewReader(delForm.Encode()))
+	delReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	delRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(delRR, delReq)
+	if delRR.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", delRR.Code)
+	}
+
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if slices.ContainsFunc(app.tagCatalog, func(v string) bool { return strings.EqualFold(v, "Gift") }) {
+		t.Fatalf("expected Gift to be removed from tag catalog")
+	}
+	if got := app.items[0].Tags; got != "Tech" {
+		t.Fatalf("expected deleted tag removed from item tags, got %q", got)
 	}
 }
 

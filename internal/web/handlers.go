@@ -46,6 +46,7 @@ type homeViewData struct {
 	SearchQuery     string
 	SelectedStatus  map[string]bool
 	TagFilter       string
+	TagOptions      []string
 	SortBy          string
 	HasActiveFilter bool
 	TotalItems      int
@@ -105,11 +106,15 @@ type itemFormViewData struct {
 	SubmitLabel          string
 	CancelHref           string
 	FormValues           Item
+	TagOptions           []string
+	SelectedTags         map[string]bool
 	PurchaseAllowedInput string
 	Error                string
 	Currency             string
 	ActiveProfile        string
 }
+
+var defaultTagOptions = []string{"Tech", "Audio", "Gaming", "Home", "Fashion", "Sports", "Office", "Travel", "Health", "Education"}
 
 type profileViewData struct {
 	Title                  string
@@ -133,6 +138,18 @@ type pageData struct {
 	CurrentPath     string
 	ContentTemplate string
 	ScriptTemplate  string
+	ActiveProfile   string
+}
+
+type tagSettingsViewData struct {
+	Title           string
+	CurrentPath     string
+	ContentTemplate string
+	ScriptTemplate  string
+	TagOptions      []string
+	NewTag          string
+	Error           string
+	Feedback        string
 	ActiveProfile   string
 }
 
@@ -163,6 +180,7 @@ type App struct {
 	nextID                 int
 	activeUserID           string
 	profileExists          bool
+	tagCatalog             []string
 }
 
 func NewApp() *App {
@@ -197,7 +215,7 @@ func newAppWithDB(db *sql.DB) (*App, error) {
 	}).ParseFS(embeddedFiles, "templates/*.html"))
 	mux := http.NewServeMux()
 
-	app := &App{templates: tpls, mux: mux, db: db, nextID: 1, activeUserID: defaultUserID}
+	app := &App{templates: tpls, mux: mux, db: db, nextID: 1, activeUserID: defaultUserID, tagCatalog: append([]string(nil), defaultTagOptions...)}
 	if err := app.loadStateFromDB(app.activeUserID); err != nil {
 		return nil, err
 	}
@@ -216,6 +234,7 @@ func (a *App) routes() {
 	a.mux.HandleFunc("/items/snooze", a.snoozeItem)
 	a.mux.HandleFunc("/insights", a.insights)
 	a.mux.HandleFunc("/settings/profile", a.profileSettings)
+	a.mux.HandleFunc("/settings/tags", a.tagSettings)
 	a.mux.HandleFunc("/settings/profile/delete", a.deleteProfile)
 	a.mux.HandleFunc("/profile", a.legacyProfile)
 	a.mux.HandleFunc("/items/status", a.updateItemStatus)
@@ -352,7 +371,7 @@ func (a *App) createItem(w http.ResponseWriter, r *http.Request) {
 		Price:           strings.TrimSpace(r.FormValue("price")),
 		Link:            strings.TrimSpace(r.FormValue("link")),
 		Note:            strings.TrimSpace(r.FormValue("note")),
-		Tags:            strings.TrimSpace(r.FormValue("tags")),
+		Tags:            parseTagsFromForm(r.Form["tags"]),
 		WaitPreset:      strings.TrimSpace(r.FormValue("wait_preset")),
 		WaitCustomHours: strings.TrimSpace(r.FormValue("wait_custom_hours")),
 	}
@@ -464,7 +483,7 @@ func (a *App) updateItem(w http.ResponseWriter, r *http.Request) {
 		Price:           strings.TrimSpace(r.FormValue("price")),
 		Link:            strings.TrimSpace(r.FormValue("link")),
 		Note:            strings.TrimSpace(r.FormValue("note")),
-		Tags:            strings.TrimSpace(r.FormValue("tags")),
+		Tags:            parseTagsFromForm(r.Form["tags"]),
 		WaitPreset:      strings.TrimSpace(r.FormValue("wait_preset")),
 		WaitCustomHours: strings.TrimSpace(r.FormValue("wait_custom_hours")),
 	}
@@ -552,6 +571,88 @@ func (a *App) profileSettings(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (a *App) tagSettings(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet, http.MethodHead:
+		a.renderTagSettings(w, tagSettingsViewData{
+			Title:       "Tag settings",
+			CurrentPath: "/settings/tags",
+			Feedback:    tagFeedbackFromQuery(r),
+		})
+	case http.MethodPost:
+		a.saveTagSettings(w, r)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func tagFeedbackFromQuery(r *http.Request) string {
+	switch r.URL.Query().Get("saved") {
+	case "1":
+		return "Tag added."
+	case "deleted":
+		return "Tag deleted."
+	default:
+		return ""
+	}
+}
+
+func (a *App) saveTagSettings(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	action := strings.TrimSpace(r.FormValue("action"))
+	tag := strings.TrimSpace(r.FormValue("tag"))
+	if action == "add" {
+		if tag == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			a.renderTagSettings(w, tagSettingsViewData{Title: "Tag settings", CurrentPath: "/settings/tags", Error: "Please enter a tag name."})
+			return
+		}
+		a.mu.Lock()
+		a.tagCatalog = appendTagOption(a.tagCatalog, tag)
+		if err := a.persistProfileLocked(); err != nil {
+			a.mu.Unlock()
+			log.Printf("db error while saving tag settings: %v", err)
+			http.Error(w, "could not save tag settings", http.StatusInternalServerError)
+			return
+		}
+		a.mu.Unlock()
+		http.Redirect(w, r, "/settings/tags?saved=1", http.StatusSeeOther)
+		return
+	}
+	if action == "delete" {
+		if tag == "" {
+			http.Error(w, "invalid tag", http.StatusBadRequest)
+			return
+		}
+		a.mu.Lock()
+		a.tagCatalog = removeTagOption(a.tagCatalog, tag)
+		for i := range a.items {
+			a.items[i].Tags = removeTagFromCSV(a.items[i].Tags, tag)
+			if err := a.updateItemLocked(a.items[i]); err != nil {
+				a.mu.Unlock()
+				log.Printf("db error while deleting tag from items: %v", err)
+				http.Error(w, "could not update items", http.StatusInternalServerError)
+				return
+			}
+		}
+		if err := a.persistProfileLocked(); err != nil {
+			a.mu.Unlock()
+			log.Printf("db error while saving tag settings: %v", err)
+			http.Error(w, "could not save tag settings", http.StatusInternalServerError)
+			return
+		}
+		a.mu.Unlock()
+		http.Redirect(w, r, "/settings/tags?saved=deleted", http.StatusSeeOther)
+		return
+	}
+
+	http.Error(w, "invalid action", http.StatusBadRequest)
 }
 
 func (a *App) deleteProfile(w http.ResponseWriter, r *http.Request) {
@@ -1024,7 +1125,7 @@ func filterAndSortItems(items []Item, searchQuery string, statuses []string, tag
 			continue
 		}
 
-		if trimmedTag != "" && !strings.Contains(strings.ToLower(item.Tags), trimmedTag) {
+		if trimmedTag != "" && !itemHasTag(item.Tags, trimmedTag) {
 			continue
 		}
 
@@ -1134,6 +1235,7 @@ func (a *App) renderHome(w http.ResponseWriter, r *http.Request, data homeViewDa
 		data.SelectedStatus[status] = true
 	}
 	data.TagFilter = strings.TrimSpace(r.URL.Query().Get("tag"))
+	data.TagOptions = availableTagOptions(allItems, a.tagCatalog)
 	data.SortBy = normalizeSortBy(r.URL.Query().Get("sort"))
 	data.HasActiveFilter = data.SearchQuery != "" || data.TagFilter != "" || data.SortBy != "next_ready" || explicitStatusSelection
 	data.Items = filterAndSortItems(allItems, data.SearchQuery, selectedStatuses, data.TagFilter, data.SortBy)
@@ -1167,6 +1269,9 @@ func (a *App) renderItemForm(w http.ResponseWriter, data itemFormViewData) {
 	data.Currency = profileCurrencyOrDefault(a.currency)
 	data.ActiveProfile = a.currentUserIDLocked()
 	a.mu.Unlock()
+
+	data.TagOptions = availableTagOptions(data.Items, a.tagCatalog)
+	data.SelectedTags = selectedTagsMap(data.FormValues.Tags)
 
 	if data.FormValues.WaitPreset == "" {
 		a.mu.RLock()
@@ -1226,6 +1331,20 @@ func (a *App) renderProfile(w http.ResponseWriter, data profileViewData) {
 
 	data.ContentTemplate = "profile_content"
 	data.ScriptTemplate = "profile_script"
+	renderTemplate(w, a.templates, "layout", data)
+}
+
+func (a *App) renderTagSettings(w http.ResponseWriter, data tagSettingsViewData) {
+	a.mu.RLock()
+	items := append([]Item(nil), a.items...)
+	tagCatalog := append([]string(nil), a.tagCatalog...)
+	if data.ActiveProfile == "" {
+		data.ActiveProfile = a.currentUserIDLocked()
+	}
+	a.mu.RUnlock()
+
+	data.TagOptions = availableTagOptions(items, tagCatalog)
+	data.ContentTemplate = "tags_content"
 	renderTemplate(w, a.templates, "layout", data)
 }
 
@@ -1646,6 +1765,143 @@ func categoriesFromTags(rawTags string) []string {
 	}
 
 	return categories
+}
+
+func availableTagOptions(items []Item, catalog []string) []string {
+	options := make([]string, 0, len(catalog)+len(items))
+	if len(catalog) == 0 {
+		options = append(options, defaultTagOptions...)
+	} else {
+		for _, tag := range catalog {
+			if trimmed := strings.TrimSpace(tag); trimmed != "" {
+				options = append(options, trimmed)
+			}
+		}
+	}
+
+	seen := map[string]struct{}{}
+	for _, option := range options {
+		seen[strings.ToLower(option)] = struct{}{}
+	}
+
+	for _, item := range items {
+		for _, category := range strings.Split(item.Tags, ",") {
+			tag := strings.TrimSpace(category)
+			if tag == "" {
+				continue
+			}
+			key := strings.ToLower(tag)
+			if _, exists := seen[key]; exists {
+				continue
+			}
+			seen[key] = struct{}{}
+			options = append(options, tag)
+		}
+	}
+
+	slices.SortFunc(options, func(a string, b string) int {
+		return strings.Compare(strings.ToLower(a), strings.ToLower(b))
+	})
+
+	return options
+}
+
+func selectedTagsMap(rawTags string) map[string]bool {
+	selected := map[string]bool{}
+	for _, part := range strings.Split(rawTags, ",") {
+		tag := strings.TrimSpace(part)
+		if tag == "" {
+			continue
+		}
+		selected[tag] = true
+	}
+	return selected
+}
+
+func parseTagsFromForm(selectedTags []string) string {
+	seen := map[string]struct{}{}
+	normalized := make([]string, 0, len(selectedTags))
+	for _, raw := range selectedTags {
+		tag := strings.TrimSpace(raw)
+		if tag == "" {
+			continue
+		}
+		key := strings.ToLower(tag)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, tag)
+	}
+
+	return strings.Join(normalized, ", ")
+}
+
+func itemHasTag(rawTags string, normalizedTagFilter string) bool {
+	for _, part := range strings.Split(rawTags, ",") {
+		if strings.ToLower(strings.TrimSpace(part)) == normalizedTagFilter {
+			return true
+		}
+	}
+	return false
+}
+
+func parseTagCatalog(raw string) []string {
+	parts := strings.Split(raw, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		tag := strings.TrimSpace(part)
+		if tag == "" {
+			continue
+		}
+		result = appendTagOption(result, tag)
+	}
+	return result
+}
+
+func appendTagOption(options []string, newTag string) []string {
+	trimmed := strings.TrimSpace(newTag)
+	if trimmed == "" {
+		return options
+	}
+	for _, existing := range options {
+		if strings.EqualFold(strings.TrimSpace(existing), trimmed) {
+			return options
+		}
+	}
+	return append(options, trimmed)
+}
+
+func removeTagOption(options []string, tag string) []string {
+	trimmed := strings.TrimSpace(tag)
+	if trimmed == "" {
+		return options
+	}
+	result := make([]string, 0, len(options))
+	for _, existing := range options {
+		if strings.EqualFold(strings.TrimSpace(existing), trimmed) {
+			continue
+		}
+		result = append(result, existing)
+	}
+	return result
+}
+
+func removeTagFromCSV(rawTags string, toRemove string) string {
+	trimmedRemove := strings.TrimSpace(toRemove)
+	if trimmedRemove == "" {
+		return rawTags
+	}
+	parts := strings.Split(rawTags, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		tag := strings.TrimSpace(part)
+		if tag == "" || strings.EqualFold(tag, trimmedRemove) {
+			continue
+		}
+		result = append(result, tag)
+	}
+	return strings.Join(result, ", ")
 }
 
 func mul100(v float64) float64 {

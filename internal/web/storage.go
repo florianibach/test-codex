@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS profiles (
 	default_wait_custom_hours TEXT NOT NULL DEFAULT '',
 	ntfy_endpoint TEXT NOT NULL DEFAULT '',
 	ntfy_topic TEXT NOT NULL DEFAULT '',
+	tag_catalog TEXT NOT NULL DEFAULT '',
 	updated_at TEXT NOT NULL
 );
 
@@ -94,11 +95,15 @@ CREATE INDEX IF NOT EXISTS idx_items_status_allowed ON items(status, purchase_al
 	if _, err := db.Exec(`ALTER TABLE profiles ADD COLUMN default_wait_custom_hours TEXT NOT NULL DEFAULT ''`); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
 		return fmt.Errorf("migrate profiles.default_wait_custom_hours: %w", err)
 	}
+	if _, err := db.Exec(`ALTER TABLE profiles ADD COLUMN tag_catalog TEXT NOT NULL DEFAULT ''`); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		return fmt.Errorf("migrate profiles.tag_catalog: %w", err)
+	}
 	return nil
 }
 
 func (a *App) loadStateFromDB(userID string) error {
 	if a.db == nil {
+		a.tagCatalog = append([]string(nil), defaultTagOptions...)
 		return nil
 	}
 
@@ -110,12 +115,14 @@ func (a *App) loadStateFromDB(userID string) error {
 	a.defaultWaitCustomHours = ""
 	a.ntfyURL = ""
 	a.ntfyTopic = ""
+	a.tagCatalog = nil
 	a.profileExists = false
 
-	row := a.db.QueryRow(`SELECT hourly_wage, currency, default_wait_preset, default_wait_custom_hours, ntfy_endpoint, ntfy_topic FROM profiles WHERE user_id = ?`, userID)
-	var hourlyWage, currency, defaultPreset, defaultCustomHours, ntfyEndpoint, ntfyTopic string
-	switch err := row.Scan(&hourlyWage, &currency, &defaultPreset, &defaultCustomHours, &ntfyEndpoint, &ntfyTopic); {
+	row := a.db.QueryRow(`SELECT hourly_wage, currency, default_wait_preset, default_wait_custom_hours, ntfy_endpoint, ntfy_topic, tag_catalog FROM profiles WHERE user_id = ?`, userID)
+	var hourlyWage, currency, defaultPreset, defaultCustomHours, ntfyEndpoint, ntfyTopic, tagCatalogRaw string
+	switch err := row.Scan(&hourlyWage, &currency, &defaultPreset, &defaultCustomHours, &ntfyEndpoint, &ntfyTopic, &tagCatalogRaw); {
 	case errors.Is(err, sql.ErrNoRows):
+		a.tagCatalog = append([]string(nil), defaultTagOptions...)
 	case err != nil:
 		return fmt.Errorf("load profile: %w", err)
 	default:
@@ -131,6 +138,10 @@ func (a *App) loadStateFromDB(userID string) error {
 		}
 		a.ntfyURL = ntfyEndpoint
 		a.ntfyTopic = ntfyTopic
+		a.tagCatalog = parseTagCatalog(tagCatalogRaw)
+		if len(a.tagCatalog) == 0 {
+			a.tagCatalog = append([]string(nil), defaultTagOptions...)
+		}
 	}
 
 	rows, err := a.db.Query(`
@@ -202,8 +213,8 @@ func (a *App) persistProfileLocked() error {
 		return nil
 	}
 	_, err := a.db.Exec(`
-INSERT INTO profiles(user_id, hourly_wage, currency, default_wait_preset, default_wait_custom_hours, ntfy_endpoint, ntfy_topic, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO profiles(user_id, hourly_wage, currency, default_wait_preset, default_wait_custom_hours, ntfy_endpoint, ntfy_topic, tag_catalog, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(user_id) DO UPDATE SET
 	hourly_wage = excluded.hourly_wage,
 	currency = excluded.currency,
@@ -211,8 +222,9 @@ ON CONFLICT(user_id) DO UPDATE SET
 	default_wait_custom_hours = excluded.default_wait_custom_hours,
 	ntfy_endpoint = excluded.ntfy_endpoint,
 	ntfy_topic = excluded.ntfy_topic,
+	tag_catalog = excluded.tag_catalog,
 	updated_at = excluded.updated_at
-`, userID, defaultHourlyWageValue(a.hourlyWage), normalizeCurrency(a.currency), defaultWaitPreset(a.defaultWaitPreset), a.defaultWaitCustomHours, a.ntfyURL, a.ntfyTopic, time.Now().Format(time.RFC3339Nano))
+`, userID, defaultHourlyWageValue(a.hourlyWage), normalizeCurrency(a.currency), defaultWaitPreset(a.defaultWaitPreset), a.defaultWaitCustomHours, a.ntfyURL, a.ntfyTopic, strings.Join(a.tagCatalog, ", "), time.Now().Format(time.RFC3339Nano))
 	if err != nil {
 		return fmt.Errorf("persist profile: %w", err)
 	}
@@ -267,6 +279,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 func (a *App) updateItemLocked(item Item) error {
 	userID := a.currentUserIDLocked()
 	if a.db == nil {
+		a.tagCatalog = append([]string(nil), defaultTagOptions...)
 		return nil
 	}
 
@@ -299,6 +312,7 @@ WHERE id = ? AND user_id = ?
 func (a *App) deleteItemLocked(itemID int) error {
 	userID := a.currentUserIDLocked()
 	if a.db == nil {
+		a.tagCatalog = append([]string(nil), defaultTagOptions...)
 		return nil
 	}
 
@@ -312,6 +326,7 @@ func (a *App) deleteItemLocked(itemID int) error {
 func (a *App) updateItemStatusLocked(itemID int, status string) error {
 	userID := a.currentUserIDLocked()
 	if a.db == nil {
+		a.tagCatalog = append([]string(nil), defaultTagOptions...)
 		return nil
 	}
 
@@ -325,6 +340,7 @@ func (a *App) updateItemStatusLocked(itemID int, status string) error {
 func (a *App) markNtfyAttemptedLocked(itemID int) error {
 	userID := a.currentUserIDLocked()
 	if a.db == nil {
+		a.tagCatalog = append([]string(nil), defaultTagOptions...)
 		return nil
 	}
 
@@ -338,6 +354,7 @@ func (a *App) markNtfyAttemptedLocked(itemID int) error {
 func (a *App) updatePromotedItemLocked(item Item) error {
 	userID := a.currentUserIDLocked()
 	if a.db == nil {
+		a.tagCatalog = append([]string(nil), defaultTagOptions...)
 		return nil
 	}
 
@@ -350,6 +367,7 @@ func (a *App) updatePromotedItemLocked(item Item) error {
 
 func (a *App) deleteProfileLocked(userID string) error {
 	if a.db == nil {
+		a.tagCatalog = append([]string(nil), defaultTagOptions...)
 		return nil
 	}
 
@@ -376,6 +394,7 @@ func (a *App) deleteProfileLocked(userID string) error {
 
 func (a *App) renameProfileLocked(oldUserID, newUserID string) error {
 	if a.db == nil {
+		a.tagCatalog = append([]string(nil), defaultTagOptions...)
 		return nil
 	}
 
