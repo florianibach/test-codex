@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -284,7 +285,6 @@ func TestHomeFilterPanelOpensWhenFiltersAreActive(t *testing.T) {
 		t.Fatalf("expected filter details to be open when filters are active")
 	}
 }
-
 
 func TestHomeFilterPanelStaysOpenForExplicitAllStatuses(t *testing.T) {
 	app := NewApp()
@@ -1931,4 +1931,264 @@ func TestFilterAndSortItemsMonkeyishNextReadyOrdering(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestSwitchProfilePageRendersExistingProfiles(t *testing.T) {
+	app, cleanup := newSQLiteTestApp(t)
+	defer cleanup()
+
+	app.mu.Lock()
+	app.activeUserID = "Alice"
+	app.hourlyWage = "30"
+	if err := app.persistProfileLocked(); err != nil {
+		app.mu.Unlock()
+		t.Fatalf("persist Alice profile: %v", err)
+	}
+	app.activeUserID = "Bob"
+	app.hourlyWage = "40"
+	if err := app.persistProfileLocked(); err != nil {
+		app.mu.Unlock()
+		t.Fatalf("persist Bob profile: %v", err)
+	}
+	app.activeUserID = "Alice"
+	if err := app.loadStateFromDB("Alice"); err != nil {
+		app.mu.Unlock()
+		t.Fatalf("reload Alice profile: %v", err)
+	}
+	app.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/switch-profile", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "value=\"Alice\"") || !strings.Contains(body, "value=\"Bob\"") {
+		t.Fatalf("expected existing profile names in datalist")
+	}
+}
+
+func TestSwitchProfileNewProfileCanOpenDashboardWithoutSettingsSave(t *testing.T) {
+	app, cleanup := newSQLiteTestApp(t)
+	defer cleanup()
+
+	form := url.Values{"profile_name": {"DirectDashboard"}}
+	req := httptest.NewRequest(http.MethodPost, "/switch-profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected switch redirect, got %d", rr.Code)
+	}
+
+	homeReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	for _, c := range rr.Result().Cookies() {
+		homeReq.AddCookie(c)
+	}
+	homeRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(homeRR, homeReq)
+	if homeRR.Code != http.StatusOK {
+		t.Fatalf("expected dashboard 200 without explicit settings save, got %d", homeRR.Code)
+	}
+}
+
+func TestSwitchProfileNewProfileRedirectsToSettingsAndResetsProfileDefaults(t *testing.T) {
+	app, cleanup := newSQLiteTestApp(t)
+	defer cleanup()
+
+	app.mu.Lock()
+	app.activeUserID = "Alice"
+	app.hourlyWage = "55"
+	app.currency = "CHF"
+	app.defaultWaitPreset = "custom"
+	app.defaultWaitCustomHours = "9"
+	if err := app.persistProfileLocked(); err != nil {
+		app.mu.Unlock()
+		t.Fatalf("persist Alice profile: %v", err)
+	}
+	app.mu.Unlock()
+
+	form := url.Values{"profile_name": {"BrandNew"}}
+	req := httptest.NewRequest(http.MethodPost, "/switch-profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected redirect, got %d", rr.Code)
+	}
+	if got := rr.Header().Get("Location"); got != "/settings/profile" {
+		t.Fatalf("expected redirect to /settings/profile for new profile, got %q", got)
+	}
+
+	settingsReq := httptest.NewRequest(http.MethodGet, "/settings/profile", nil)
+	for _, c := range rr.Result().Cookies() {
+		settingsReq.AddCookie(c)
+	}
+	settingsRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(settingsRR, settingsReq)
+	if settingsRR.Code != http.StatusOK {
+		t.Fatalf("expected settings page 200, got %d", settingsRR.Code)
+	}
+	body := settingsRR.Body.String()
+	if strings.Contains(body, "value=\"55\"") {
+		t.Fatalf("expected hourly wage to be reset for brand new profile")
+	}
+	if strings.Contains(body, "value=\"CHF\"") {
+		t.Fatalf("expected currency to be reset for brand new profile")
+	}
+	if !strings.Contains(body, "<option value=\"24h\" selected>") {
+		t.Fatalf("expected default wait preset to reset to 24h")
+	}
+}
+
+func TestSwitchProfileChangesContextAndSetsCookie(t *testing.T) {
+	app, cleanup := newSQLiteTestApp(t)
+	defer cleanup()
+
+	app.mu.Lock()
+	app.activeUserID = "Alice"
+	app.hourlyWage = "20"
+	if err := app.persistProfileLocked(); err != nil {
+		app.mu.Unlock()
+		t.Fatalf("persist Alice profile: %v", err)
+	}
+	app.hourlyWage = ""
+	item := Item{Title: "alice item", Status: "Waiting", WaitPreset: "24h", PurchaseAllowedAt: time.Now().Add(24 * time.Hour), CreatedAt: time.Now()}
+	if err := app.insertItemLocked(&item); err != nil {
+		app.mu.Unlock()
+		t.Fatalf("insert Alice item: %v", err)
+	}
+
+	app.activeUserID = "Bob"
+	app.hourlyWage = "25"
+	if err := app.persistProfileLocked(); err != nil {
+		app.mu.Unlock()
+		t.Fatalf("persist Bob profile: %v", err)
+	}
+	if err := app.loadStateFromDB("Bob"); err != nil {
+		app.mu.Unlock()
+		t.Fatalf("switch to Bob: %v", err)
+	}
+	app.mu.Unlock()
+
+	form := url.Values{"profile_name": {"Alice"}}
+	req := httptest.NewRequest(http.MethodPost, "/switch-profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected redirect, got %d", rr.Code)
+	}
+	if got := rr.Header().Get("Set-Cookie"); !strings.Contains(got, "active_profile=Alice") {
+		t.Fatalf("expected active_profile cookie, got %q", got)
+	}
+
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if app.activeUserID != "Alice" {
+		t.Fatalf("expected active user Alice, got %q", app.activeUserID)
+	}
+	if len(app.items) != 1 || app.items[0].Title != "alice item" {
+		t.Fatalf("expected Alice items loaded after switch")
+	}
+}
+
+func TestAboutShowsActiveProfileInHeader(t *testing.T) {
+	app := NewApp()
+	app.mu.Lock()
+	app.activeUserID = "Test"
+	app.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/about", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if body := rr.Body.String(); !strings.Contains(body, "Profile: Test") {
+		t.Fatalf("expected active profile in about header")
+	}
+}
+
+func TestProfileSettingsCanRenameActiveProfile(t *testing.T) {
+	app, cleanup := newSQLiteTestApp(t)
+	defer cleanup()
+
+	app.mu.Lock()
+	app.activeUserID = "OldName"
+	app.hourlyWage = "30"
+	if err := app.persistProfileLocked(); err != nil {
+		app.mu.Unlock()
+		t.Fatalf("persist old profile: %v", err)
+	}
+	item := Item{Title: "owned-item", Status: "Waiting", WaitPreset: "24h", PurchaseAllowedAt: time.Now().Add(24 * time.Hour), CreatedAt: time.Now()}
+	if err := app.insertItemLocked(&item); err != nil {
+		app.mu.Unlock()
+		t.Fatalf("insert old profile item: %v", err)
+	}
+	app.mu.Unlock()
+
+	form := url.Values{}
+	form.Set("profile_name", "NewName")
+	form.Set("hourly_wage", "30")
+	form.Set("default_wait_preset", "24h")
+	form.Set("currency", "EUR")
+	req := httptest.NewRequest(http.MethodPost, "/settings/profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected redirect, got %d", rr.Code)
+	}
+	if got := rr.Header().Get("Set-Cookie"); !strings.Contains(got, "active_profile=NewName") {
+		t.Fatalf("expected active_profile cookie for renamed profile, got %q", got)
+	}
+
+	app.mu.RLock()
+	if app.activeUserID != "NewName" {
+		app.mu.RUnlock()
+		t.Fatalf("expected active profile renamed to NewName, got %q", app.activeUserID)
+	}
+	app.mu.RUnlock()
+
+	switchReq := httptest.NewRequest(http.MethodPost, "/switch-profile", strings.NewReader(url.Values{"profile_name": {"NewName"}}.Encode()))
+	switchReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	switchRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(switchRR, switchReq)
+	if switchRR.Code != http.StatusSeeOther {
+		t.Fatalf("expected switch redirect, got %d", switchRR.Code)
+	}
+
+	homeReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	homeRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(homeRR, homeReq)
+	if homeRR.Code != http.StatusOK {
+		t.Fatalf("expected home 200, got %d", homeRR.Code)
+	}
+	if body := homeRR.Body.String(); !strings.Contains(body, "owned-item") {
+		t.Fatalf("expected item to remain with renamed profile")
+	}
+}
+
+func newSQLiteTestApp(t *testing.T) (*App, func()) {
+	t.Helper()
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.sqlite")
+	app, err := NewAppWithSQLite(dbPath)
+	if err != nil {
+		t.Fatalf("new sqlite app: %v", err)
+	}
+	cleanup := func() {
+		if app.db != nil {
+			_ = app.db.Close()
+		}
+	}
+	return app, cleanup
 }

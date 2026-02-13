@@ -52,6 +52,7 @@ type homeViewData struct {
 	HourlyWage      float64
 	HasHourlyWage   bool
 	Currency        string
+	ActiveProfile   string
 }
 
 type insightsViewData struct {
@@ -67,6 +68,7 @@ type insightsViewData struct {
 	SavedTrend      []monthlySavedAmount
 	CategoryRatios  []categorySkipRatio
 	Currency        string
+	ActiveProfile   string
 }
 
 type categoryCount struct {
@@ -106,6 +108,7 @@ type itemFormViewData struct {
 	PurchaseAllowedInput string
 	Error                string
 	Currency             string
+	ActiveProfile        string
 }
 
 type profileViewData struct {
@@ -113,6 +116,7 @@ type profileViewData struct {
 	CurrentPath            string
 	ContentTemplate        string
 	ScriptTemplate         string
+	ProfileName            string
 	ProfileHourly          string
 	DefaultWaitPreset      string
 	DefaultWaitCustomHours string
@@ -121,6 +125,7 @@ type profileViewData struct {
 	Currency               string
 	ProfileError           string
 	ProfileFeedback        string
+	ActiveProfile          string
 }
 
 type pageData struct {
@@ -128,6 +133,18 @@ type pageData struct {
 	CurrentPath     string
 	ContentTemplate string
 	ScriptTemplate  string
+	ActiveProfile   string
+}
+
+type profileSwitchViewData struct {
+	Title           string
+	CurrentPath     string
+	ContentTemplate string
+	ScriptTemplate  string
+	SelectedName    string
+	Names           []string
+	Error           string
+	ActiveProfile   string
 }
 
 type App struct {
@@ -144,6 +161,8 @@ type App struct {
 	currency               string
 	dashboardURL           string
 	nextID                 int
+	activeUserID           string
+	profileExists          bool
 }
 
 func NewApp() *App {
@@ -178,8 +197,8 @@ func newAppWithDB(db *sql.DB) (*App, error) {
 	}).ParseFS(embeddedFiles, "templates/*.html"))
 	mux := http.NewServeMux()
 
-	app := &App{templates: tpls, mux: mux, db: db, nextID: 1}
-	if err := app.loadStateFromDB(); err != nil {
+	app := &App{templates: tpls, mux: mux, db: db, nextID: 1, activeUserID: defaultUserID}
+	if err := app.loadStateFromDB(app.activeUserID); err != nil {
 		return nil, err
 	}
 	app.routes()
@@ -190,6 +209,7 @@ func newAppWithDB(db *sql.DB) (*App, error) {
 
 func (a *App) routes() {
 	a.mux.HandleFunc("/", a.home)
+	a.mux.HandleFunc("/switch-profile", a.switchProfile)
 	a.mux.HandleFunc("/items/new", a.itemForm)
 	a.mux.HandleFunc("/items/edit", a.editItemForm)
 	a.mux.HandleFunc("/items/delete", a.deleteItem)
@@ -236,6 +256,28 @@ func (a *App) SetDashboardURL(raw string) {
 	a.mu.Unlock()
 }
 
+func (a *App) activateProfileFromRequest(r *http.Request) error {
+	cookie, err := r.Cookie("active_profile")
+	if err != nil {
+		if errors.Is(err, http.ErrNoCookie) {
+			return nil
+		}
+		return err
+	}
+	name := strings.TrimSpace(cookie.Value)
+	if name == "" {
+		return nil
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.activeUserID == name {
+		return nil
+	}
+	a.activeUserID = name
+	return a.loadStateFromDB(name)
+}
+
 func (a *App) home(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
@@ -244,6 +286,14 @@ func (a *App) home(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet, http.MethodHead:
+		if err := a.activateProfileFromRequest(r); err != nil {
+			http.Error(w, "could not activate profile", http.StatusInternalServerError)
+			return
+		}
+		if !a.hasActiveProfile() {
+			http.Redirect(w, r, "/switch-profile", http.StatusSeeOther)
+			return
+		}
 		if !a.hasProfile() {
 			http.Redirect(w, r, "/settings/profile", http.StatusSeeOther)
 			return
@@ -524,6 +574,28 @@ func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	profileNameRaw := strings.TrimSpace(r.FormValue("profile_name"))
+	if profileNameRaw == "" {
+		profileNameRaw = a.activeProfileName()
+	}
+	profileName, err := parseProfileName(profileNameRaw)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		a.renderProfile(w, profileViewData{
+			Title:                  "Profile settings",
+			CurrentPath:            "/settings/profile",
+			ProfileName:            strings.TrimSpace(profileNameRaw),
+			ProfileHourly:          strings.TrimSpace(r.FormValue("hourly_wage")),
+			DefaultWaitPreset:      strings.TrimSpace(r.FormValue("default_wait_preset")),
+			DefaultWaitCustomHours: strings.TrimSpace(r.FormValue("default_wait_custom_hours")),
+			NtfyEndpoint:           strings.TrimRight(strings.TrimSpace(r.FormValue("ntfy_endpoint")), "/"),
+			NtfyTopic:              strings.TrimSpace(r.FormValue("ntfy_topic")),
+			Currency:               normalizeCurrency(r.FormValue("currency")),
+			ProfileError:           err.Error(),
+		})
+		return
+	}
+
 	hourlyWage := strings.TrimSpace(r.FormValue("hourly_wage"))
 	defaultPreset := strings.TrimSpace(r.FormValue("default_wait_preset"))
 	defaultCustomHours := strings.TrimSpace(r.FormValue("default_wait_custom_hours"))
@@ -536,6 +608,7 @@ func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 		a.renderProfile(w, profileViewData{
 			Title:                  "Profile settings",
 			CurrentPath:            "/settings/profile",
+			ProfileName:            profileName,
 			ProfileHourly:          hourlyWage,
 			DefaultWaitPreset:      defaultPreset,
 			DefaultWaitCustomHours: defaultCustomHours,
@@ -552,6 +625,7 @@ func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 		a.renderProfile(w, profileViewData{
 			Title:                  "Profile settings",
 			CurrentPath:            "/settings/profile",
+			ProfileName:            profileName,
 			ProfileHourly:          hourlyWage,
 			DefaultWaitPreset:      defaultPreset,
 			DefaultWaitCustomHours: defaultCustomHours,
@@ -568,6 +642,7 @@ func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 		a.renderProfile(w, profileViewData{
 			Title:                  "Profile settings",
 			CurrentPath:            "/settings/profile",
+			ProfileName:            profileName,
 			ProfileHourly:          hourlyWage,
 			DefaultWaitPreset:      defaultPreset,
 			DefaultWaitCustomHours: defaultCustomHours,
@@ -580,6 +655,16 @@ func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.mu.Lock()
+	previousProfileName := a.currentUserIDLocked()
+	if profileName != previousProfileName {
+		if err := a.renameProfileLocked(previousProfileName, profileName); err != nil {
+			a.mu.Unlock()
+			log.Printf("db error while renaming profile: %v", err)
+			http.Error(w, "could not rename profile", http.StatusInternalServerError)
+			return
+		}
+		a.activeUserID = profileName
+	}
 	a.hourlyWage = hourlyWage
 	a.defaultWaitPreset = defaultWaitPreset(defaultPreset)
 	if a.defaultWaitPreset == "custom" {
@@ -597,6 +682,7 @@ func (a *App) saveProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.mu.Unlock()
+	http.SetCookie(w, &http.Cookie{Name: "active_profile", Value: profileName, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode})
 
 	http.Redirect(w, r, "/settings/profile?saved=1", http.StatusSeeOther)
 }
@@ -833,7 +919,10 @@ func defaultWaitPreset(raw string) string {
 func (a *App) hasProfile() bool {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	return strings.TrimSpace(a.hourlyWage) != ""
+	if a.db == nil {
+		return a.profileExists || strings.TrimSpace(a.hourlyWage) != ""
+	}
+	return a.profileExists
 }
 
 func normalizeSortBy(raw string) string {
@@ -844,6 +933,8 @@ func normalizeSortBy(raw string) string {
 		return "next_ready"
 	}
 }
+
+const defaultProfileHourlyWage = "25"
 
 var allStatuses = []string{"Waiting", "Ready to buy", "Bought", "Skipped"}
 
@@ -985,6 +1076,7 @@ func (a *App) renderHome(w http.ResponseWriter, r *http.Request, data homeViewDa
 	allItems := append([]Item(nil), a.items...)
 	data.TotalItems = len(allItems)
 	data.Currency = profileCurrencyOrDefault(a.currency)
+	data.ActiveProfile = a.currentUserIDLocked()
 	if parsedWage, err := parseHourlyWage(a.hourlyWage); err == nil {
 		data.HourlyWage = parsedWage
 		data.HasHourlyWage = true
@@ -1015,6 +1107,7 @@ func (a *App) renderInsights(w http.ResponseWriter, data insightsViewData) {
 	data.SavedTrend = buildMonthlySavedTrend(a.items)
 	data.CategoryRatios = buildCategorySkipRatios(a.items)
 	data.Currency = profileCurrencyOrDefault(a.currency)
+	data.ActiveProfile = a.currentUserIDLocked()
 	a.mu.Unlock()
 
 	data.ContentTemplate = "insights_content"
@@ -1026,6 +1119,7 @@ func (a *App) renderItemForm(w http.ResponseWriter, data itemFormViewData) {
 	a.promoteReadyItemsLocked(time.Now())
 	data.Items = append([]Item(nil), a.items...)
 	data.Currency = profileCurrencyOrDefault(a.currency)
+	data.ActiveProfile = a.currentUserIDLocked()
 	a.mu.Unlock()
 
 	if data.FormValues.WaitPreset == "" {
@@ -1058,6 +1152,9 @@ func (a *App) renderItemForm(w http.ResponseWriter, data itemFormViewData) {
 
 func (a *App) renderProfile(w http.ResponseWriter, data profileViewData) {
 	a.mu.RLock()
+	if data.ProfileName == "" {
+		data.ProfileName = a.currentUserIDLocked()
+	}
 	if data.ProfileHourly == "" {
 		data.ProfileHourly = a.hourlyWage
 	}
@@ -1070,6 +1167,9 @@ func (a *App) renderProfile(w http.ResponseWriter, data profileViewData) {
 	if data.Currency == "" {
 		data.Currency = profileCurrencyOrDefault(a.currency)
 	}
+	if data.ActiveProfile == "" {
+		data.ActiveProfile = a.currentUserIDLocked()
+	}
 	if data.DefaultWaitPreset == "" {
 		data.DefaultWaitPreset = defaultWaitPreset(a.defaultWaitPreset)
 	}
@@ -1081,6 +1181,129 @@ func (a *App) renderProfile(w http.ResponseWriter, data profileViewData) {
 	data.ContentTemplate = "profile_content"
 	data.ScriptTemplate = "profile_script"
 	renderTemplate(w, a.templates, "layout", data)
+}
+
+func parseProfileName(raw string) (string, error) {
+	name := strings.TrimSpace(raw)
+	if name == "" {
+		return "", errors.New("Please enter a profile name.")
+	}
+	if len([]rune(name)) > 64 {
+		return "", errors.New("Profile name must be 64 characters or fewer.")
+	}
+	return name, nil
+}
+
+func (a *App) hasActiveProfile() bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return strings.TrimSpace(a.activeUserID) != ""
+}
+
+func (a *App) currentUserIDLocked() string {
+	if strings.TrimSpace(a.activeUserID) == "" {
+		return defaultUserID
+	}
+	return a.activeUserID
+}
+
+func (a *App) activeProfileName() string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.currentUserIDLocked()
+}
+
+func (a *App) listProfileNames() ([]string, error) {
+	a.mu.RLock()
+	db := a.db
+	a.mu.RUnlock()
+	if db == nil {
+		if a.activeProfileName() == defaultUserID {
+			return nil, nil
+		}
+		return []string{a.activeProfileName()}, nil
+	}
+
+	rows, err := db.Query(`SELECT user_id FROM (
+	SELECT user_id FROM profiles
+	UNION
+	SELECT user_id FROM items
+) ORDER BY user_id COLLATE NOCASE`)
+	if err != nil {
+		return nil, fmt.Errorf("list profile names: %w", err)
+	}
+	defer rows.Close()
+
+	names := make([]string, 0)
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("scan profile name: %w", err)
+		}
+		names = append(names, name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate profile names: %w", err)
+	}
+	return names, nil
+}
+
+func (a *App) switchProfile(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/switch-profile" {
+		http.NotFound(w, r)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet, http.MethodHead:
+		names, err := a.listProfileNames()
+		if err != nil {
+			http.Error(w, "could not load profiles", http.StatusInternalServerError)
+			return
+		}
+		renderTemplate(w, a.templates, "layout", profileSwitchViewData{Title: "Choose profile", CurrentPath: "/switch-profile", ContentTemplate: "switch_profile_content", Names: names, SelectedName: "", ActiveProfile: a.activeProfileName()})
+	case http.MethodPost:
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "invalid form data", http.StatusBadRequest)
+			return
+		}
+		name, err := parseProfileName(r.FormValue("profile_name"))
+		if err != nil {
+			names, _ := a.listProfileNames()
+			renderTemplate(w, a.templates, "layout", profileSwitchViewData{Title: "Choose profile", CurrentPath: "/switch-profile", ContentTemplate: "switch_profile_content", Names: names, SelectedName: "", Error: err.Error(), ActiveProfile: a.activeProfileName()})
+			return
+		}
+
+		a.mu.Lock()
+		a.activeUserID = name
+		if err := a.loadStateFromDB(name); err != nil {
+			a.mu.Unlock()
+			http.Error(w, "could not switch profile", http.StatusInternalServerError)
+			return
+		}
+		isNewProfile := !a.profileExists
+		if strings.TrimSpace(a.hourlyWage) == "" {
+			a.hourlyWage = defaultProfileHourlyWage
+		}
+		if strings.TrimSpace(a.currency) == "" {
+			a.currency = normalizeCurrency("")
+		}
+		if err := a.persistProfileLocked(); err != nil {
+			a.mu.Unlock()
+			http.Error(w, "could not initialize profile", http.StatusInternalServerError)
+			return
+		}
+		needsProfileSetup := isNewProfile
+		a.mu.Unlock()
+		http.SetCookie(w, &http.Cookie{Name: "active_profile", Value: name, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode})
+		if needsProfileSetup {
+			http.Redirect(w, r, "/settings/profile", http.StatusSeeOther)
+			return
+		}
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 func parseHourlyWage(raw string) (float64, error) {
@@ -1396,7 +1619,7 @@ func statusBadgeClass(status string) string {
 }
 
 func (a *App) about(w http.ResponseWriter, r *http.Request) {
-	renderTemplate(w, a.templates, "layout", pageData{Title: "About", CurrentPath: "/about", ContentTemplate: "about_content"})
+	renderTemplate(w, a.templates, "layout", pageData{Title: "About", CurrentPath: "/about", ContentTemplate: "about_content", ActiveProfile: a.activeProfileName()})
 }
 
 func (a *App) health(w http.ResponseWriter, r *http.Request) {

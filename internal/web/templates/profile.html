@@ -3,6 +3,7 @@
   <div class="card-body">
     <h1 class="h3 mb-1">Profile settings</h1>
     <p class="text-secondary small mb-3">Usually configured once, available anytime.</p>
+    <a class="btn btn-sm btn-outline-secondary mb-3" href="/switch-profile">Switch profile</a>
 
     {{if .ProfileError}}
     <div class="alert alert-danger py-2" role="alert">{{.ProfileError}}</div>
@@ -12,6 +13,11 @@
     {{end}}
 
     <form id="profile-edit-form" method="post" action="/settings/profile" class="vstack gap-3">
+      <div>
+        <label for="profile_name" class="form-label">Profile name</label>
+        <input id="profile_name" name="profile_name" type="text" class="form-control" value="{{.ProfileName}}" required />
+      </div>
+
       <div class="form-section">
         <p class="section-heading mb-2">Defaults</p>
         <div class="vstack gap-3">

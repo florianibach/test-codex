@@ -97,22 +97,33 @@ CREATE INDEX IF NOT EXISTS idx_items_status_allowed ON items(status, purchase_al
 	return nil
 }
 
-func (a *App) loadStateFromDB() error {
+func (a *App) loadStateFromDB(userID string) error {
 	if a.db == nil {
 		return nil
 	}
 
 	a.items = nil
 	a.nextID = 1
+	a.hourlyWage = ""
+	a.currency = ""
+	a.defaultWaitPreset = defaultWaitPreset("")
+	a.defaultWaitCustomHours = ""
+	a.ntfyURL = ""
+	a.ntfyTopic = ""
+	a.profileExists = false
 
-	row := a.db.QueryRow(`SELECT hourly_wage, currency, default_wait_preset, default_wait_custom_hours, ntfy_endpoint, ntfy_topic FROM profiles WHERE user_id = ?`, defaultUserID)
+	row := a.db.QueryRow(`SELECT hourly_wage, currency, default_wait_preset, default_wait_custom_hours, ntfy_endpoint, ntfy_topic FROM profiles WHERE user_id = ?`, userID)
 	var hourlyWage, currency, defaultPreset, defaultCustomHours, ntfyEndpoint, ntfyTopic string
 	switch err := row.Scan(&hourlyWage, &currency, &defaultPreset, &defaultCustomHours, &ntfyEndpoint, &ntfyTopic); {
 	case errors.Is(err, sql.ErrNoRows):
 	case err != nil:
 		return fmt.Errorf("load profile: %w", err)
 	default:
-		a.hourlyWage = hourlyWage
+		a.profileExists = true
+		a.hourlyWage = strings.TrimSpace(hourlyWage)
+		if a.hourlyWage == "" {
+			a.hourlyWage = defaultProfileHourlyWage
+		}
 		a.currency = normalizeCurrency(currency)
 		a.defaultWaitPreset = defaultWaitPreset(defaultPreset)
 		if a.defaultWaitPreset == "custom" {
@@ -127,7 +138,7 @@ SELECT id, title, price, COALESCE(price_value, 0), has_price_value, link, note, 
 FROM items
 WHERE user_id = ?
 ORDER BY id DESC
-`, defaultUserID)
+`, userID)
 	if err != nil {
 		return fmt.Errorf("load items: %w", err)
 	}
@@ -185,7 +196,9 @@ ORDER BY id DESC
 }
 
 func (a *App) persistProfileLocked() error {
+	userID := a.currentUserIDLocked()
 	if a.db == nil {
+		a.profileExists = true
 		return nil
 	}
 	_, err := a.db.Exec(`
@@ -199,14 +212,18 @@ ON CONFLICT(user_id) DO UPDATE SET
 	ntfy_endpoint = excluded.ntfy_endpoint,
 	ntfy_topic = excluded.ntfy_topic,
 	updated_at = excluded.updated_at
-`, defaultUserID, a.hourlyWage, normalizeCurrency(a.currency), defaultWaitPreset(a.defaultWaitPreset), a.defaultWaitCustomHours, a.ntfyURL, a.ntfyTopic, time.Now().Format(time.RFC3339Nano))
+`, userID, defaultHourlyWageValue(a.hourlyWage), normalizeCurrency(a.currency), defaultWaitPreset(a.defaultWaitPreset), a.defaultWaitCustomHours, a.ntfyURL, a.ntfyTopic, time.Now().Format(time.RFC3339Nano))
 	if err != nil {
 		return fmt.Errorf("persist profile: %w", err)
 	}
+	a.hourlyWage = defaultHourlyWageValue(a.hourlyWage)
+	a.currency = normalizeCurrency(a.currency)
+	a.profileExists = true
 	return nil
 }
 
 func (a *App) insertItemLocked(item *Item) error {
+	userID := a.currentUserIDLocked()
 	if a.db == nil {
 		item.ID = a.nextID
 		a.nextID++
@@ -217,7 +234,7 @@ func (a *App) insertItemLocked(item *Item) error {
 INSERT INTO items(user_id, title, price, price_value, has_price_value, link, note, tags, status, wait_preset, wait_custom_hours, purchase_allowed_at, created_at, ntfy_attempted)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `,
-		defaultUserID,
+		userID,
 		item.Title,
 		item.Price,
 		item.PriceValue,
@@ -248,6 +265,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 }
 
 func (a *App) updateItemLocked(item Item) error {
+	userID := a.currentUserIDLocked()
 	if a.db == nil {
 		return nil
 	}
@@ -270,7 +288,7 @@ WHERE id = ? AND user_id = ?
 		item.PurchaseAllowedAt.Format(time.RFC3339Nano),
 		boolToInt(item.NtfyAttempted),
 		item.ID,
-		defaultUserID,
+		userID,
 	)
 	if err != nil {
 		return fmt.Errorf("update item: %w", err)
@@ -279,11 +297,12 @@ WHERE id = ? AND user_id = ?
 }
 
 func (a *App) deleteItemLocked(itemID int) error {
+	userID := a.currentUserIDLocked()
 	if a.db == nil {
 		return nil
 	}
 
-	_, err := a.db.Exec(`DELETE FROM items WHERE id = ? AND user_id = ?`, itemID, defaultUserID)
+	_, err := a.db.Exec(`DELETE FROM items WHERE id = ? AND user_id = ?`, itemID, userID)
 	if err != nil {
 		return fmt.Errorf("delete item: %w", err)
 	}
@@ -291,11 +310,12 @@ func (a *App) deleteItemLocked(itemID int) error {
 }
 
 func (a *App) updateItemStatusLocked(itemID int, status string) error {
+	userID := a.currentUserIDLocked()
 	if a.db == nil {
 		return nil
 	}
 
-	_, err := a.db.Exec(`UPDATE items SET status = ? WHERE id = ? AND user_id = ?`, status, itemID, defaultUserID)
+	_, err := a.db.Exec(`UPDATE items SET status = ? WHERE id = ? AND user_id = ?`, status, itemID, userID)
 	if err != nil {
 		return fmt.Errorf("update item status: %w", err)
 	}
@@ -303,11 +323,12 @@ func (a *App) updateItemStatusLocked(itemID int, status string) error {
 }
 
 func (a *App) markNtfyAttemptedLocked(itemID int) error {
+	userID := a.currentUserIDLocked()
 	if a.db == nil {
 		return nil
 	}
 
-	_, err := a.db.Exec(`UPDATE items SET ntfy_attempted = 1 WHERE id = ? AND user_id = ?`, itemID, defaultUserID)
+	_, err := a.db.Exec(`UPDATE items SET ntfy_attempted = 1 WHERE id = ? AND user_id = ?`, itemID, userID)
 	if err != nil {
 		return fmt.Errorf("mark ntfy attempted: %w", err)
 	}
@@ -315,15 +336,58 @@ func (a *App) markNtfyAttemptedLocked(itemID int) error {
 }
 
 func (a *App) updatePromotedItemLocked(item Item) error {
+	userID := a.currentUserIDLocked()
 	if a.db == nil {
 		return nil
 	}
 
-	_, err := a.db.Exec(`UPDATE items SET status = ?, ntfy_attempted = ? WHERE id = ? AND user_id = ?`, item.Status, boolToInt(item.NtfyAttempted), item.ID, defaultUserID)
+	_, err := a.db.Exec(`UPDATE items SET status = ?, ntfy_attempted = ? WHERE id = ? AND user_id = ?`, item.Status, boolToInt(item.NtfyAttempted), item.ID, userID)
 	if err != nil {
 		return fmt.Errorf("update promoted item: %w", err)
 	}
 	return nil
+}
+
+func (a *App) renameProfileLocked(oldUserID, newUserID string) error {
+	if a.db == nil {
+		return nil
+	}
+
+	tx, err := a.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin rename profile tx: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	if _, err := tx.Exec(`
+UPDATE items
+SET user_id = ?
+WHERE user_id = ?
+`, newUserID, oldUserID); err != nil {
+		return fmt.Errorf("move items to renamed profile: %w", err)
+	}
+
+	if _, err := tx.Exec(`
+UPDATE profiles
+SET user_id = ?
+WHERE user_id = ?
+`, newUserID, oldUserID); err != nil {
+		return fmt.Errorf("rename profile row: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit rename profile tx: %w", err)
+	}
+	return nil
+}
+
+func defaultHourlyWageValue(raw string) string {
+	if strings.TrimSpace(raw) == "" {
+		return defaultProfileHourlyWage
+	}
+	return strings.TrimSpace(raw)
 }
 
 func boolToInt(v bool) int {

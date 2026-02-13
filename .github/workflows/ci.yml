@@ -37,6 +37,9 @@ jobs:
       - name: Run monkeyish suite
         run: npm run test:e2e:monkeyish
 
+      - name: Run R1-006 profile-switch suite
+        run: npm run test:e2e:r1-006
+
       - name: Upload Playwright artifacts
         if: always()
         uses: actions/upload-artifact@v4
