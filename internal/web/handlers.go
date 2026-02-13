@@ -215,7 +215,11 @@ func newAppWithDB(db *sql.DB) (*App, error) {
 	}).ParseFS(embeddedFiles, "templates/*.html"))
 	mux := http.NewServeMux()
 
-	app := &App{templates: tpls, mux: mux, db: db, nextID: 1, activeUserID: defaultUserID, tagCatalog: append([]string(nil), defaultTagOptions...)}
+	activeUserID := defaultUserID
+	if db != nil {
+		activeUserID = ""
+	}
+	app := &App{templates: tpls, mux: mux, db: db, nextID: 1, activeUserID: activeUserID, tagCatalog: append([]string(nil), defaultTagOptions...)}
 	if err := app.loadStateFromDB(app.activeUserID); err != nil {
 		return nil, err
 	}
@@ -280,22 +284,59 @@ func (a *App) activateProfileFromRequest(r *http.Request) error {
 	cookie, err := r.Cookie("active_profile")
 	if err != nil {
 		if errors.Is(err, http.ErrNoCookie) {
-			return nil
+			cookie = nil
+		} else {
+			return err
 		}
-		return err
 	}
-	name := strings.TrimSpace(cookie.Value)
-	if name == "" {
-		return nil
+
+	name := ""
+	if cookie != nil {
+		name = strings.TrimSpace(cookie.Value)
 	}
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
+	if name == "" {
+		if a.db == nil {
+			return nil
+		}
+		name, err = a.firstProfileNameByIDLocked()
+		if err != nil {
+			return err
+		}
+		if name == "" {
+			a.activeUserID = ""
+			return nil
+		}
+	}
+
 	if a.activeUserID == name {
 		return nil
 	}
 	a.activeUserID = name
 	return a.loadStateFromDB(name)
+}
+
+func (a *App) firstProfileNameByIDLocked() (string, error) {
+	if a.db == nil {
+		return "", nil
+	}
+
+	var name string
+	err := a.db.QueryRow(`SELECT user_id FROM profiles ORDER BY rowid ASC LIMIT 1`).Scan(&name)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = a.db.QueryRow(`SELECT user_id FROM items GROUP BY user_id ORDER BY MIN(id) ASC LIMIT 1`).Scan(&name)
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("find first profile name: %w", err)
+	}
+
+	return strings.TrimSpace(name), nil
 }
 
 func (a *App) home(w http.ResponseWriter, r *http.Request) {
