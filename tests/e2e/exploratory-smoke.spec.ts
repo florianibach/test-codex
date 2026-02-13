@@ -191,7 +191,10 @@ test('dashboard keeps combined search, status filter and sort consistent after r
   const filterPanel = page.locator('details.mb-3').first();
   await filterPanel.locator('summary').click();
   await page.getByLabel('Search').fill(token);
-  await page.getByLabel('Status').selectOption('Ready to buy');
+  await page.getByLabel('Waiting').uncheck();
+  await page.getByLabel('Ready to buy').check();
+  await page.getByLabel('Bought').uncheck();
+  await page.getByLabel('Skipped').uncheck();
   await page.getByLabel('Sort').selectOption('newest');
   await page.getByRole('button', { name: 'Apply' }).click();
 
@@ -202,6 +205,9 @@ test('dashboard keeps combined search, status filter and sort consistent after r
 
   await expect(page.locator('details.mb-3')).toHaveAttribute('open', '');
   await expect(page).toHaveURL(/status=Ready\+to\+buy/);
+  await expect(page).not.toHaveURL(/status=Waiting/);
+  await expect(page).not.toHaveURL(/status=Bought/);
+  await expect(page).not.toHaveURL(/status=Skipped/);
   await expect(page).toHaveURL(/sort=newest/);
   await expect(page.locator('li.list-group-item').filter({ hasText: includeTitle })).toHaveCount(1);
   await expect(page.locator('li.list-group-item').filter({ hasText: excludeTitle })).toHaveCount(0);
@@ -381,6 +387,10 @@ test('editing a skipped item with future wait time reopens it as waiting', async
   const readyRow = await waitForItemStatus(page, title, 'Ready to buy');
   await readyRow.getByRole('button', { name: 'Mark as skipped' }).click();
 
+  await page.locator('details.mb-3 summary').click();
+  await page.getByLabel('Skipped').check();
+  await page.getByRole('button', { name: 'Apply' }).click();
+
   const skippedRow = page.locator('li.list-group-item').filter({ hasText: title }).first();
   await expect(skippedRow.locator('.badge').first()).toHaveText('Skipped');
   await skippedRow.getByRole('link', { name: 'Edit' }).click();
@@ -465,6 +475,10 @@ test('delete flow supports cancel and removes item from dashboard and insights o
 
   const readyRow = await waitForItemStatus(page, title, 'Ready to buy');
   await readyRow.getByRole('button', { name: 'Mark as skipped' }).click();
+
+  await page.locator('details.mb-3 summary').click();
+  await page.getByLabel('Skipped').check();
+  await page.getByRole('button', { name: 'Apply' }).click();
 
   const row = page.locator('li.list-group-item').filter({ hasText: title }).first();
   await expect(row.locator('.badge').first()).toHaveText('Skipped');
