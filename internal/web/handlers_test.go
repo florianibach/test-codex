@@ -1970,6 +1970,31 @@ func TestSwitchProfilePageRendersExistingProfiles(t *testing.T) {
 	}
 }
 
+func TestSwitchProfileNewProfileCanOpenDashboardWithoutSettingsSave(t *testing.T) {
+	app, cleanup := newSQLiteTestApp(t)
+	defer cleanup()
+
+	form := url.Values{"profile_name": {"DirectDashboard"}}
+	req := httptest.NewRequest(http.MethodPost, "/switch-profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected switch redirect, got %d", rr.Code)
+	}
+
+	homeReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	for _, c := range rr.Result().Cookies() {
+		homeReq.AddCookie(c)
+	}
+	homeRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(homeRR, homeReq)
+	if homeRR.Code != http.StatusOK {
+		t.Fatalf("expected dashboard 200 without explicit settings save, got %d", homeRR.Code)
+	}
+}
+
 func TestSwitchProfileNewProfileRedirectsToSettingsAndResetsProfileDefaults(t *testing.T) {
 	app, cleanup := newSQLiteTestApp(t)
 	defer cleanup()

@@ -162,6 +162,7 @@ type App struct {
 	dashboardURL           string
 	nextID                 int
 	activeUserID           string
+	profileExists          bool
 }
 
 func NewApp() *App {
@@ -918,7 +919,10 @@ func defaultWaitPreset(raw string) string {
 func (a *App) hasProfile() bool {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	return strings.TrimSpace(a.hourlyWage) != ""
+	if a.db == nil {
+		return a.profileExists || strings.TrimSpace(a.hourlyWage) != ""
+	}
+	return a.profileExists
 }
 
 func normalizeSortBy(raw string) string {

@@ -110,6 +110,7 @@ func (a *App) loadStateFromDB(userID string) error {
 	a.defaultWaitCustomHours = ""
 	a.ntfyURL = ""
 	a.ntfyTopic = ""
+	a.profileExists = false
 
 	row := a.db.QueryRow(`SELECT hourly_wage, currency, default_wait_preset, default_wait_custom_hours, ntfy_endpoint, ntfy_topic FROM profiles WHERE user_id = ?`, userID)
 	var hourlyWage, currency, defaultPreset, defaultCustomHours, ntfyEndpoint, ntfyTopic string
@@ -118,6 +119,7 @@ func (a *App) loadStateFromDB(userID string) error {
 	case err != nil:
 		return fmt.Errorf("load profile: %w", err)
 	default:
+		a.profileExists = true
 		a.hourlyWage = hourlyWage
 		a.currency = normalizeCurrency(currency)
 		a.defaultWaitPreset = defaultWaitPreset(defaultPreset)
@@ -193,6 +195,7 @@ ORDER BY id DESC
 func (a *App) persistProfileLocked() error {
 	userID := a.currentUserIDLocked()
 	if a.db == nil {
+		a.profileExists = true
 		return nil
 	}
 	_, err := a.db.Exec(`
@@ -210,6 +213,7 @@ ON CONFLICT(user_id) DO UPDATE SET
 	if err != nil {
 		return fmt.Errorf("persist profile: %w", err)
 	}
+	a.profileExists = true
 	return nil
 }
 
