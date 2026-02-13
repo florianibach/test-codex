@@ -367,6 +367,9 @@ details > summary { cursor: pointer; }
   flex-shrink: 0;
 }
 
+.status-badge-mobile { display: none; }
+.status-badge-desktop { display: inline-block; }
+
 .item-side {
   margin-left: auto;
   min-width: 12.5rem;
@@ -479,6 +482,14 @@ summary:focus-visible {
   .item-side {
     width: 100%;
     min-width: 0;
+  }
+
+  .status-badge-desktop {
+    display: none;
+  }
+
+  .status-badge-mobile {
+    display: inline-block;
   }
 }
 
