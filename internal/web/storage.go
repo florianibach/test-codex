@@ -120,7 +120,10 @@ func (a *App) loadStateFromDB(userID string) error {
 		return fmt.Errorf("load profile: %w", err)
 	default:
 		a.profileExists = true
-		a.hourlyWage = hourlyWage
+		a.hourlyWage = strings.TrimSpace(hourlyWage)
+		if a.hourlyWage == "" {
+			a.hourlyWage = defaultProfileHourlyWage
+		}
 		a.currency = normalizeCurrency(currency)
 		a.defaultWaitPreset = defaultWaitPreset(defaultPreset)
 		if a.defaultWaitPreset == "custom" {
@@ -209,10 +212,12 @@ ON CONFLICT(user_id) DO UPDATE SET
 	ntfy_endpoint = excluded.ntfy_endpoint,
 	ntfy_topic = excluded.ntfy_topic,
 	updated_at = excluded.updated_at
-`, userID, a.hourlyWage, normalizeCurrency(a.currency), defaultWaitPreset(a.defaultWaitPreset), a.defaultWaitCustomHours, a.ntfyURL, a.ntfyTopic, time.Now().Format(time.RFC3339Nano))
+`, userID, defaultHourlyWageValue(a.hourlyWage), normalizeCurrency(a.currency), defaultWaitPreset(a.defaultWaitPreset), a.defaultWaitCustomHours, a.ntfyURL, a.ntfyTopic, time.Now().Format(time.RFC3339Nano))
 	if err != nil {
 		return fmt.Errorf("persist profile: %w", err)
 	}
+	a.hourlyWage = defaultHourlyWageValue(a.hourlyWage)
+	a.currency = normalizeCurrency(a.currency)
 	a.profileExists = true
 	return nil
 }
@@ -376,6 +381,13 @@ WHERE user_id = ?
 		return fmt.Errorf("commit rename profile tx: %w", err)
 	}
 	return nil
+}
+
+func defaultHourlyWageValue(raw string) string {
+	if strings.TrimSpace(raw) == "" {
+		return defaultProfileHourlyWage
+	}
+	return strings.TrimSpace(raw)
 }
 
 func boolToInt(v bool) int {

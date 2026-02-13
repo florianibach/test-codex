@@ -29,7 +29,7 @@ test('R1-006: new profile redirects to settings with reset defaults', async ({ p
   await page.getByRole('button', { name: 'Create' }).click();
   await expect(page).toHaveURL(/\/settings\/profile/);
 
-  await expect(page.getByLabel('Net hourly wage')).toHaveValue('');
+  await expect(page.getByLabel('Net hourly wage')).toHaveValue('25');
   await expect(page.getByLabel('Currency')).toHaveValue('€');
   await expect(page.getByLabel('Default wait time')).toHaveValue('24h');
 });

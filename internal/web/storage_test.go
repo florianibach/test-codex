@@ -204,7 +204,7 @@ func TestSwitchProfileCreatesDefaultProfileRowWithoutSettingsSave(t *testing.T) 
 		t.Fatalf("expected switch redirect, got %d", switchRR.Code)
 	}
 	if got := switchRR.Header().Get("Location"); got != "/settings/profile" {
-		t.Fatalf("expected redirect to settings for missing wage, got %q", got)
+		t.Fatalf("expected redirect to settings for new profile setup, got %q", got)
 	}
 
 	reloadedApp, err := NewAppWithSQLite(dbPath)
@@ -219,5 +219,29 @@ func TestSwitchProfileCreatesDefaultProfileRowWithoutSettingsSave(t *testing.T) 
 	}
 	if body := reloadedSwitchRR.Body.String(); !strings.Contains(body, "AutoCreated") {
 		t.Fatalf("expected auto-created profile to be listed on switch page")
+	}
+
+	settingsReq := httptest.NewRequest(http.MethodPost, "/switch-profile", strings.NewReader(url.Values{"profile_name": {"AutoCreated"}}.Encode()))
+	settingsReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	settingsRR := httptest.NewRecorder()
+	reloadedApp.Handler().ServeHTTP(settingsRR, settingsReq)
+	if settingsRR.Code != http.StatusSeeOther {
+		t.Fatalf("expected switch redirect to created profile, got %d", settingsRR.Code)
+	}
+
+	profileReq := httptest.NewRequest(http.MethodGet, "/settings/profile", nil)
+	for _, c := range settingsRR.Result().Cookies() {
+		profileReq.AddCookie(c)
+	}
+	profileRR := httptest.NewRecorder()
+	reloadedApp.Handler().ServeHTTP(profileRR, profileReq)
+	if profileRR.Code != http.StatusOK {
+		t.Fatalf("expected settings page 200, got %d", profileRR.Code)
+	}
+	if body := profileRR.Body.String(); !strings.Contains(body, "value=\"25\"") {
+		t.Fatalf("expected default hourly wage in auto-created profile settings")
+	}
+	if body := profileRR.Body.String(); !strings.Contains(body, "value=\"€\"") {
+		t.Fatalf("expected default currency in auto-created profile settings")
 	}
 }
