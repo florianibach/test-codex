@@ -80,3 +80,29 @@ test('R1-006: profile name can be renamed in settings', async ({ page }) => {
   await expect(page.getByRole('button', { name: profileB })).toBeVisible();
   await expect(page.getByRole('button', { name: profileA })).toHaveCount(0);
 });
+
+
+test('R1-006.1: delete profile removes it and redirects to profile switch', async ({ page }) => {
+  const profileKeep = uniqueName('KeepProfile');
+  const profileDelete = uniqueName('DeleteProfile');
+
+  await page.goto('/switch-profile');
+  await page.getByLabel('Profile name').fill(profileKeep);
+  await page.getByRole('button', { name: 'Create' }).click();
+  await saveProfile(page, '26', 'EUR');
+
+  await page.goto('/switch-profile');
+  await page.getByLabel('Profile name').fill(profileDelete);
+  await page.getByRole('button', { name: 'Create' }).click();
+  await saveProfile(page, '31', '$');
+
+  page.once('dialog', async (dialog) => {
+    expect(dialog.message()).toContain('Delete this profile');
+    await dialog.accept();
+  });
+
+  await page.getByRole('button', { name: 'Delete profile' }).click();
+  await expect(page).toHaveURL(/\/switch-profile/);
+  await expect(page.getByRole('button', { name: profileDelete })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: profileKeep })).toBeVisible();
+});

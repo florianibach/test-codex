@@ -348,6 +348,32 @@ func (a *App) updatePromotedItemLocked(item Item) error {
 	return nil
 }
 
+func (a *App) deleteProfileLocked(userID string) error {
+	if a.db == nil {
+		return nil
+	}
+
+	tx, err := a.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin delete profile tx: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	if _, err := tx.Exec(`DELETE FROM items WHERE user_id = ?`, userID); err != nil {
+		return fmt.Errorf("delete profile items: %w", err)
+	}
+	if _, err := tx.Exec(`DELETE FROM profiles WHERE user_id = ?`, userID); err != nil {
+		return fmt.Errorf("delete profile row: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit delete profile tx: %w", err)
+	}
+	return nil
+}
+
 func (a *App) renameProfileLocked(oldUserID, newUserID string) error {
 	if a.db == nil {
 		return nil

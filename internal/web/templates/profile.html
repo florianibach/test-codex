@@ -59,7 +59,15 @@
         </div>
       </div>
 
-      <button id="profile-save-btn" class="btn btn-outline-primary" type="submit">Save profile</button>
+      <div class="d-flex gap-2 flex-wrap">
+        <button id="profile-save-btn" class="btn btn-outline-primary" type="submit">Save profile</button>
+      </div>
+    </form>
+
+    <hr class="my-4" />
+
+    <form method="post" action="/settings/profile/delete" onsubmit="return confirm('Delete this profile and all related data permanently?');">
+      <button class="btn btn-outline-danger" type="submit">Delete profile</button>
     </form>
   </div>
 </section>
