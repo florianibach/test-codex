@@ -1768,6 +1768,16 @@ func TestProfileCurrencyPersistsAndRendersAcrossViews(t *testing.T) {
 		t.Fatalf("expected item form to show currency in price label")
 	}
 
+	editReq := httptest.NewRequest(http.MethodGet, "/items/edit?id=1", nil)
+	editRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(editRR, editReq)
+	if editRR.Code != http.StatusOK {
+		t.Fatalf("expected edit item form 200, got %d", editRR.Code)
+	}
+	if body := editRR.Body.String(); !strings.Contains(body, "Price (CHF)") {
+		t.Fatalf("expected edit item form to show currency in price label")
+	}
+
 	app.mu.Lock()
 	app.items[0].Status = "Skipped"
 	app.items[0].HasPriceValue = true
