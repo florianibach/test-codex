@@ -997,8 +997,7 @@ func (a *App) renderHome(w http.ResponseWriter, r *http.Request, data homeViewDa
 	}
 	data.TagFilter = strings.TrimSpace(r.URL.Query().Get("tag"))
 	data.SortBy = normalizeSortBy(r.URL.Query().Get("sort"))
-	hasStatusFilter := len(selectedStatuses) < len(allStatuses)
-	data.HasActiveFilter = data.SearchQuery != "" || data.TagFilter != "" || data.SortBy != "next_ready" || (explicitStatusSelection && hasStatusFilter)
+	data.HasActiveFilter = data.SearchQuery != "" || data.TagFilter != "" || data.SortBy != "next_ready" || explicitStatusSelection
 	data.Items = filterAndSortItems(allItems, data.SearchQuery, selectedStatuses, data.TagFilter, data.SortBy)
 	data.ContentTemplate = "index_content"
 	data.ScriptTemplate = "index_script"

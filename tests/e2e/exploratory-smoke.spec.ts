@@ -58,6 +58,23 @@ test('dashboard filter panel is collapsed by default and opens on demand', async
   await expect(filterPanel).toHaveAttribute('open', '');
 });
 
+
+test('dashboard all status shortcut selects all filters and keeps panel open', async ({ page }) => {
+  await ensureProfileConfigured(page);
+
+  await page.goto('/');
+  const filterPanel = page.locator('details.mb-3').first();
+  await filterPanel.locator('summary').click();
+
+  await page.getByRole('button', { name: 'All' }).click();
+
+  await expect(page).toHaveURL(/status=Waiting/);
+  await expect(page).toHaveURL(/status=Ready\+to\+buy/);
+  await expect(page).toHaveURL(/status=Bought/);
+  await expect(page).toHaveURL(/status=Skipped/);
+  await expect(page.locator('details.mb-3').first()).toHaveAttribute('open', '');
+});
+
 test('dashboard search, tag filter, and price sort work together', async ({ page }) => {
   await ensureProfileConfigured(page);
 

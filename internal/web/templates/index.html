@@ -28,6 +28,8 @@
         <fieldset class="col-12 col-md-5">
           <legend class="form-label mb-1">Status</legend>
           <div class="status-filter-group d-flex flex-wrap gap-2">
+            <button class="btn btn-sm status-filter-badge status-filter-all" type="button" data-status-all="true" aria-pressed="false">All</button>
+
             <input class="status-filter-input" id="status-waiting" type="checkbox" name="status" value="Waiting" {{if index .SelectedStatus "Waiting"}}checked{{end}} />
             <label class="btn btn-sm status-filter-badge" for="status-waiting">Waiting</label>
 
@@ -157,9 +159,42 @@
       filterForm.submit();
     };
 
-    filterForm.querySelectorAll("input[name='status']").forEach(function (statusInput) {
-      statusInput.addEventListener("change", submitFilterForm);
+    var statusInputs = Array.prototype.slice.call(filterForm.querySelectorAll("input[name='status']"));
+    var allStatusesButton = filterForm.querySelector("button[data-status-all='true']");
+
+    var allStatusesSelected = function () {
+      return statusInputs.length > 0 && statusInputs.every(function (statusInput) {
+        return statusInput.checked;
+      });
+    };
+
+    var syncAllStatusesButton = function () {
+      if (!allStatusesButton) {
+        return;
+      }
+      var allSelected = allStatusesSelected();
+      allStatusesButton.classList.toggle("is-active", allSelected);
+      allStatusesButton.setAttribute("aria-pressed", allSelected ? "true" : "false");
+    };
+
+    statusInputs.forEach(function (statusInput) {
+      statusInput.addEventListener("change", function () {
+        syncAllStatusesButton();
+        submitFilterForm();
+      });
     });
+
+    if (allStatusesButton) {
+      allStatusesButton.addEventListener("click", function () {
+        statusInputs.forEach(function (statusInput) {
+          statusInput.checked = true;
+        });
+        syncAllStatusesButton();
+        submitFilterForm();
+      });
+    }
+
+    syncAllStatusesButton();
 
     ["#sort", "#tag"].forEach(function (selector) {
       var field = filterForm.querySelector(selector);
