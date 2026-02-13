@@ -2344,6 +2344,56 @@ func TestProfileSettingsCanRenameActiveProfile(t *testing.T) {
 	}
 }
 
+
+func TestHomeWithoutCookieSelectsSmallestProfileID(t *testing.T) {
+	app, cleanup := newSQLiteTestApp(t)
+	defer cleanup()
+
+	app.mu.Lock()
+	app.activeUserID = "Zed"
+	app.hourlyWage = "30"
+	if err := app.persistProfileLocked(); err != nil {
+		app.mu.Unlock()
+		t.Fatalf("persist Zed profile: %v", err)
+	}
+	app.activeUserID = "Amy"
+	app.hourlyWage = "35"
+	if err := app.persistProfileLocked(); err != nil {
+		app.mu.Unlock()
+		t.Fatalf("persist Amy profile: %v", err)
+	}
+	app.activeUserID = ""
+	app.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if got := app.activeProfileName(); got != "Zed" {
+		t.Fatalf("expected smallest id profile Zed to be selected, got %q", got)
+	}
+}
+
+func TestActivateProfileFromRequestWithoutProfilesLeavesNoActiveProfile(t *testing.T) {
+	app, cleanup := newSQLiteTestApp(t)
+	defer cleanup()
+
+	app.mu.Lock()
+	app.activeUserID = ""
+	app.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	if err := app.activateProfileFromRequest(req); err != nil {
+		t.Fatalf("activate profile: %v", err)
+	}
+	if app.hasActiveProfile() {
+		t.Fatalf("expected no active profile when there are no profiles")
+	}
+}
+
 func newSQLiteTestApp(t *testing.T) (*App, func()) {
 	t.Helper()
 	dir := t.TempDir()
