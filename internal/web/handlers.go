@@ -44,7 +44,7 @@ type homeViewData struct {
 	ScriptTemplate  string
 	Items           []Item
 	SearchQuery     string
-	StatusFilter    string
+	SelectedStatus  map[string]bool
 	TagFilter       string
 	SortBy          string
 	HasActiveFilter bool
@@ -845,14 +845,45 @@ func normalizeSortBy(raw string) string {
 	}
 }
 
-func filterAndSortItems(items []Item, searchQuery string, statusFilter string, tagFilter string, sortBy string) []Item {
+var allStatuses = []string{"Waiting", "Ready to buy", "Bought", "Skipped"}
+
+func parseStatusFilter(raw []string) ([]string, bool) {
+	if len(raw) == 0 {
+		return []string{"Waiting", "Ready to buy"}, false
+	}
+
+	selected := make([]string, 0, len(allStatuses))
+	seen := make(map[string]bool, len(allStatuses))
+	for _, candidate := range raw {
+		for _, part := range strings.Split(candidate, ",") {
+			trimmed := strings.TrimSpace(part)
+			if !slices.Contains(allStatuses, trimmed) || seen[trimmed] {
+				continue
+			}
+			seen[trimmed] = true
+			selected = append(selected, trimmed)
+		}
+	}
+
+	if len(selected) == 0 {
+		return []string{"Waiting", "Ready to buy"}, false
+	}
+
+	return selected, true
+}
+
+func filterAndSortItems(items []Item, searchQuery string, statuses []string, tagFilter string, sortBy string) []Item {
 	trimmedSearch := strings.ToLower(strings.TrimSpace(searchQuery))
-	trimmedStatus := strings.TrimSpace(statusFilter)
 	trimmedTag := strings.ToLower(strings.TrimSpace(tagFilter))
+	statusFilter := make(map[string]bool, len(statuses))
+	for _, status := range statuses {
+		statusFilter[status] = true
+	}
+	hasStatusFilter := len(statusFilter) > 0 && len(statusFilter) < len(allStatuses)
 
 	filtered := make([]Item, 0, len(items))
 	for _, item := range items {
-		if trimmedStatus != "" && item.Status != trimmedStatus {
+		if hasStatusFilter && !statusFilter[item.Status] {
 			continue
 		}
 
@@ -905,9 +936,38 @@ func filterAndSortItems(items []Item, searchQuery string, statusFilter string, t
 				}
 			}
 		default:
-			if cmp := a.PurchaseAllowedAt.Compare(b.PurchaseAllowedAt); cmp != 0 {
+			statusRank := func(status string) int {
+				switch status {
+				case "Ready to buy":
+					return 0
+				case "Waiting":
+					return 1
+				default:
+					return 2
+				}
+			}
+
+			if cmp := statusRank(a.Status) - statusRank(b.Status); cmp != 0 {
+				if cmp < 0 {
+					return -1
+				}
+				return 1
+			}
+
+			if a.Status == "Ready to buy" || a.Status == "Waiting" {
+				if cmp := a.PurchaseAllowedAt.Compare(b.PurchaseAllowedAt); cmp != 0 {
+					return cmp
+				}
+			} else {
+				if cmp := b.CreatedAt.Compare(a.CreatedAt); cmp != 0 {
+					return cmp
+				}
+			}
+
+			if cmp := b.CreatedAt.Compare(a.CreatedAt); cmp != 0 {
 				return cmp
 			}
+			return b.ID - a.ID
 		}
 
 		if cmp := b.CreatedAt.Compare(a.CreatedAt); cmp != 0 {
@@ -930,11 +990,15 @@ func (a *App) renderHome(w http.ResponseWriter, r *http.Request, data homeViewDa
 		data.HasHourlyWage = true
 	}
 	data.SearchQuery = strings.TrimSpace(r.URL.Query().Get("q"))
-	data.StatusFilter = strings.TrimSpace(r.URL.Query().Get("status"))
+	selectedStatuses, explicitStatusSelection := parseStatusFilter(r.URL.Query()["status"])
+	data.SelectedStatus = make(map[string]bool, len(selectedStatuses))
+	for _, status := range selectedStatuses {
+		data.SelectedStatus[status] = true
+	}
 	data.TagFilter = strings.TrimSpace(r.URL.Query().Get("tag"))
 	data.SortBy = normalizeSortBy(r.URL.Query().Get("sort"))
-	data.HasActiveFilter = data.SearchQuery != "" || data.StatusFilter != "" || data.TagFilter != "" || data.SortBy != "next_ready"
-	data.Items = filterAndSortItems(allItems, data.SearchQuery, data.StatusFilter, data.TagFilter, data.SortBy)
+	data.HasActiveFilter = data.SearchQuery != "" || data.TagFilter != "" || data.SortBy != "next_ready" || explicitStatusSelection
+	data.Items = filterAndSortItems(allItems, data.SearchQuery, selectedStatuses, data.TagFilter, data.SortBy)
 	data.ContentTemplate = "index_content"
 	data.ScriptTemplate = "index_script"
 	a.mu.Unlock()

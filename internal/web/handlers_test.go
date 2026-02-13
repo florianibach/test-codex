@@ -258,6 +258,15 @@ func TestHomeFilterPanelIsCollapsedByDefault(t *testing.T) {
 	if strings.Contains(body, "<details class=\"mb-3\" open>") {
 		t.Fatalf("expected filter details to be collapsed by default")
 	}
+	if !strings.Contains(body, "data-auto-submit-filter=\"true\"") {
+		t.Fatalf("expected auto-submit filter form marker")
+	}
+	if strings.Contains(body, ">Apply<") {
+		t.Fatalf("did not expect manual apply button")
+	}
+	if !strings.Contains(body, "data-status-all=\"true\"") {
+		t.Fatalf("expected all-status shortcut button")
+	}
 }
 
 func TestHomeFilterPanelOpensWhenFiltersAreActive(t *testing.T) {
@@ -273,6 +282,23 @@ func TestHomeFilterPanelOpensWhenFiltersAreActive(t *testing.T) {
 	}
 	if body := rr.Body.String(); !strings.Contains(body, "<details class=\"mb-3\" open>") {
 		t.Fatalf("expected filter details to be open when filters are active")
+	}
+}
+
+
+func TestHomeFilterPanelStaysOpenForExplicitAllStatuses(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+
+	req := httptest.NewRequest(http.MethodGet, "/?status=Waiting&status=Ready+to+buy&status=Bought&status=Skipped", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if body := rr.Body.String(); !strings.Contains(body, "<details class=\"mb-3\" open>") {
+		t.Fatalf("expected filter details to stay open for explicit all-status selection")
 	}
 }
 
@@ -1782,5 +1808,127 @@ func TestProfileCurrencyFallsBackToEuroWhenEmpty(t *testing.T) {
 	}
 	if body := profileRR.Body.String(); !strings.Contains(body, "value=\"€\"") {
 		t.Fatalf("expected empty currency to fallback to euro")
+	}
+}
+
+func TestHomeDefaultsToOpenStatuses(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+	now := time.Now()
+
+	app.mu.Lock()
+	app.items = append(app.items,
+		Item{ID: 1, Title: "Waiting item", Status: "Waiting", CreatedAt: now.Add(-4 * time.Hour), PurchaseAllowedAt: now.Add(2 * time.Hour)},
+		Item{ID: 2, Title: "Ready item", Status: "Ready to buy", CreatedAt: now.Add(-3 * time.Hour), PurchaseAllowedAt: now.Add(-2 * time.Hour)},
+		Item{ID: 3, Title: "Bought item", Status: "Bought", CreatedAt: now.Add(-2 * time.Hour), PurchaseAllowedAt: now.Add(-4 * time.Hour)},
+		Item{ID: 4, Title: "Skipped item", Status: "Skipped", CreatedAt: now.Add(-1 * time.Hour), PurchaseAllowedAt: now.Add(-5 * time.Hour)},
+	)
+	app.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "Waiting item") || !strings.Contains(body, "Ready item") {
+		t.Fatalf("expected waiting and ready items in default list")
+	}
+	if strings.Contains(body, "Bought item") || strings.Contains(body, "Skipped item") {
+		t.Fatalf("did not expect closed items in default list")
+	}
+}
+
+func TestHomeNextReadySortAcrossStatusesWhenAllSelected(t *testing.T) {
+	app := NewApp()
+	seedProfile(app)
+	now := time.Now()
+
+	app.mu.Lock()
+	app.items = append(app.items,
+		Item{ID: 1, Title: "ready-early", Status: "Ready to buy", CreatedAt: now.Add(-6 * time.Hour), PurchaseAllowedAt: now.Add(-3 * time.Hour)},
+		Item{ID: 2, Title: "ready-late", Status: "Ready to buy", CreatedAt: now.Add(-5 * time.Hour), PurchaseAllowedAt: now.Add(-1 * time.Hour)},
+		Item{ID: 3, Title: "waiting-early", Status: "Waiting", CreatedAt: now.Add(-4 * time.Hour), PurchaseAllowedAt: now.Add(1 * time.Hour)},
+		Item{ID: 4, Title: "waiting-late", Status: "Waiting", CreatedAt: now.Add(-3 * time.Hour), PurchaseAllowedAt: now.Add(5 * time.Hour)},
+		Item{ID: 5, Title: "bought-new", Status: "Bought", CreatedAt: now.Add(-30 * time.Minute), PurchaseAllowedAt: now.Add(-10 * time.Hour)},
+		Item{ID: 6, Title: "skipped-old", Status: "Skipped", CreatedAt: now.Add(-2 * time.Hour), PurchaseAllowedAt: now.Add(-11 * time.Hour)},
+	)
+	app.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/?sort=next_ready&status=Waiting&status=Ready+to+buy&status=Bought&status=Skipped", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+
+	ordered := []string{"ready-early", "ready-late", "waiting-early", "waiting-late", "bought-new", "skipped-old"}
+	prev := -1
+	for _, label := range ordered {
+		idx := strings.Index(body, label)
+		if idx == -1 {
+			t.Fatalf("expected %s in response", label)
+		}
+		if idx < prev {
+			t.Fatalf("expected %s to appear after previous item", label)
+		}
+		prev = idx
+	}
+}
+
+func TestFilterAndSortItemsMonkeyishNextReadyOrdering(t *testing.T) {
+	now := time.Now()
+	statuses := []string{"Waiting", "Ready to buy", "Bought", "Skipped"}
+	items := make([]Item, 0, 60)
+	for i := 0; i < 60; i++ {
+		status := statuses[i%len(statuses)]
+		items = append(items, Item{
+			ID:                i + 1,
+			Title:             "item",
+			Status:            status,
+			CreatedAt:         now.Add(-time.Duration((i*37)%500) * time.Minute),
+			PurchaseAllowedAt: now.Add(time.Duration((i*53)%400-200) * time.Minute),
+		})
+	}
+
+	sorted := filterAndSortItems(items, "", statuses, "", "next_ready")
+	if len(sorted) != len(items) {
+		t.Fatalf("expected %d items, got %d", len(items), len(sorted))
+	}
+
+	rank := func(status string) int {
+		switch status {
+		case "Ready to buy":
+			return 0
+		case "Waiting":
+			return 1
+		default:
+			return 2
+		}
+	}
+
+	for i := 1; i < len(sorted); i++ {
+		prev := sorted[i-1]
+		curr := sorted[i]
+		if rank(prev.Status) > rank(curr.Status) {
+			t.Fatalf("status rank regression from %s to %s at %d", prev.Status, curr.Status, i)
+		}
+
+		if rank(prev.Status) == rank(curr.Status) {
+			switch prev.Status {
+			case "Ready to buy", "Waiting":
+				if prev.PurchaseAllowedAt.After(curr.PurchaseAllowedAt) {
+					t.Fatalf("purchase order regression within %s at %d", prev.Status, i)
+				}
+			case "Bought", "Skipped":
+				if prev.CreatedAt.Before(curr.CreatedAt) {
+					t.Fatalf("created order regression within closed statuses at %d", i)
+				}
+			}
+		}
 	}
 }
