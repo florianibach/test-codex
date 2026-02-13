@@ -355,6 +355,9 @@ func (a *App) home(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/switch-profile", http.StatusSeeOther)
 			return
 		}
+		if _, err := r.Cookie("active_profile"); errors.Is(err, http.ErrNoCookie) {
+			http.SetCookie(w, &http.Cookie{Name: "active_profile", Value: a.activeProfileName(), Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode})
+		}
 		if !a.hasProfile() {
 			http.Redirect(w, r, "/settings/profile", http.StatusSeeOther)
 			return

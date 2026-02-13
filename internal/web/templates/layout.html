@@ -9,9 +9,12 @@
 </head>
 <body class="bg-body-tertiary">
   <header class="navbar shadow-sm">
-    <div class="container nav-container">
+    <div class="nav-container">
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="primary-nav" aria-label="Toggle navigation">
+        <span class="nav-toggle-icon" aria-hidden="true"></span>
+      </button>
       <a class="navbar-brand" href="/">Impulse Pause</a>
-      <nav class="navbar-nav" aria-label="Primary">
+      <nav class="navbar-nav" id="primary-nav" aria-label="Primary">
         <a class="nav-link {{if eq .CurrentPath "/"}}active{{end}}" href="/">Dashboard</a>
         <a class="nav-link {{if eq .CurrentPath "/items/new"}}active{{end}}" href="/items/new">Add item</a>
         <a class="nav-link {{if eq .CurrentPath "/insights"}}active{{end}}" href="/insights">Insights</a>
@@ -19,7 +22,7 @@
         <a class="nav-link {{if eq .CurrentPath "/settings/tags"}}active{{end}}" href="/settings/tags">Tags</a>
         <a class="nav-link {{if eq .CurrentPath "/about"}}active{{end}}" href="/about">About</a>
       </nav>
-      {{if .ActiveProfile}}<span class="small text-secondary">Profile: {{.ActiveProfile}}</span>{{end}}
+      {{if .ActiveProfile}}<span class="profile-badge">{{.ActiveProfile}}</span>{{end}}
     </div>
   </header>
 
@@ -40,6 +43,31 @@
       {{template "tags_content" .}}
     {{end}}
   </main>
+
+  <script>
+    (() => {
+      const toggle = document.querySelector('.nav-toggle');
+      const nav = document.querySelector('.navbar-nav');
+      const mobileWidth = 900;
+      if (!toggle || !nav) return;
+
+      const closeMenu = () => {
+        nav.classList.remove('is-open');
+        toggle.setAttribute('aria-expanded', 'false');
+      };
+
+      toggle.addEventListener('click', () => {
+        const isOpen = nav.classList.toggle('is-open');
+        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      });
+
+      window.addEventListener('resize', () => {
+        if (window.innerWidth > mobileWidth) {
+          closeMenu();
+        }
+      });
+    })();
+  </script>
 
   {{if eq .ScriptTemplate "index_script"}}
     {{template "index_script" .}}

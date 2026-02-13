@@ -2278,7 +2278,7 @@ func TestAboutShowsActiveProfileInHeader(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rr.Code)
 	}
-	if body := rr.Body.String(); !strings.Contains(body, "Profile: Test") {
+	if body := rr.Body.String(); !strings.Contains(body, `<span class="profile-badge">Test</span>`) {
 		t.Fatalf("expected active profile in about header")
 	}
 }
@@ -2374,6 +2374,9 @@ func TestHomeWithoutCookieSelectsSmallestProfileID(t *testing.T) {
 	}
 	if got := app.activeProfileName(); got != "Zed" {
 		t.Fatalf("expected smallest id profile Zed to be selected, got %q", got)
+	}
+	if got := rr.Header().Get("Set-Cookie"); !strings.Contains(got, "active_profile=Zed") {
+		t.Fatalf("expected active_profile cookie for selected profile, got %q", got)
 	}
 }
 
