@@ -341,14 +341,13 @@ details > summary { cursor: pointer; }
 
 .item-entry {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: .75rem 1rem;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: .5rem;
+  width: 100%;
 }
 
 .item-main {
-  flex: 1 1 16rem;
+  width: 100%;
   min-width: 0;
 }
 
@@ -369,8 +368,8 @@ details > summary { cursor: pointer; }
 
 
 .item-side {
-  margin-left: auto;
-  min-width: 12.5rem;
+  width: 100%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -475,11 +474,6 @@ summary:focus-visible {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .item-side {
-    width: 100%;
-    min-width: 0;
   }
 
 }
