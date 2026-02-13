@@ -1275,6 +1275,11 @@ func (a *App) switchProfile(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "could not switch profile", http.StatusInternalServerError)
 			return
 		}
+		if err := a.persistProfileLocked(); err != nil {
+			a.mu.Unlock()
+			http.Error(w, "could not initialize profile", http.StatusInternalServerError)
+			return
+		}
 		needsProfileSetup := strings.TrimSpace(a.hourlyWage) == ""
 		a.mu.Unlock()
 		http.SetCookie(w, &http.Cookie{Name: "active_profile", Value: name, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode})

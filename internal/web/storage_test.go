@@ -187,3 +187,37 @@ func TestRenameProfilePersistsAcrossReloadInSQLite(t *testing.T) {
 		t.Fatalf("expected item to remain visible under renamed profile")
 	}
 }
+
+func TestSwitchProfileCreatesDefaultProfileRowWithoutSettingsSave(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "app.db")
+
+	app, err := NewAppWithSQLite(dbPath)
+	if err != nil {
+		t.Fatalf("expected app to initialize with sqlite, got error: %v", err)
+	}
+
+	switchReq := httptest.NewRequest(http.MethodPost, "/switch-profile", strings.NewReader(url.Values{"profile_name": {"AutoCreated"}}.Encode()))
+	switchReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	switchRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(switchRR, switchReq)
+	if switchRR.Code != http.StatusSeeOther {
+		t.Fatalf("expected switch redirect, got %d", switchRR.Code)
+	}
+	if got := switchRR.Header().Get("Location"); got != "/settings/profile" {
+		t.Fatalf("expected redirect to settings for missing wage, got %q", got)
+	}
+
+	reloadedApp, err := NewAppWithSQLite(dbPath)
+	if err != nil {
+		t.Fatalf("expected app reload with sqlite, got error: %v", err)
+	}
+	reloadedSwitchReq := httptest.NewRequest(http.MethodGet, "/switch-profile", nil)
+	reloadedSwitchRR := httptest.NewRecorder()
+	reloadedApp.Handler().ServeHTTP(reloadedSwitchRR, reloadedSwitchReq)
+	if reloadedSwitchRR.Code != http.StatusOK {
+		t.Fatalf("expected switch page 200, got %d", reloadedSwitchRR.Code)
+	}
+	if body := reloadedSwitchRR.Body.String(); !strings.Contains(body, "AutoCreated") {
+		t.Fatalf("expected auto-created profile to be listed on switch page")
+	}
+}
