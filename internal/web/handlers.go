@@ -216,6 +216,7 @@ func (a *App) routes() {
 	a.mux.HandleFunc("/items/snooze", a.snoozeItem)
 	a.mux.HandleFunc("/insights", a.insights)
 	a.mux.HandleFunc("/settings/profile", a.profileSettings)
+	a.mux.HandleFunc("/settings/profile/delete", a.deleteProfile)
 	a.mux.HandleFunc("/profile", a.legacyProfile)
 	a.mux.HandleFunc("/items/status", a.updateItemStatus)
 	a.mux.HandleFunc("/healthz", a.health)
@@ -551,6 +552,51 @@ func (a *App) profileSettings(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (a *App) deleteProfile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	names, err := a.listProfileNames()
+	if err != nil {
+		http.Error(w, "could not load profiles", http.StatusInternalServerError)
+		return
+	}
+	if len(names) <= 1 {
+		w.WriteHeader(http.StatusConflict)
+		a.renderProfile(w, profileViewData{
+			Title:        "Profile settings",
+			CurrentPath:  "/settings/profile",
+			ProfileError: "The last remaining profile cannot be deleted. Please create or switch to another profile first.",
+		})
+		return
+	}
+
+	a.mu.Lock()
+	profileName := a.currentUserIDLocked()
+	if err := a.deleteProfileLocked(profileName); err != nil {
+		a.mu.Unlock()
+		log.Printf("db error while deleting profile: %v", err)
+		http.Error(w, "could not delete profile", http.StatusInternalServerError)
+		return
+	}
+	a.activeUserID = ""
+	a.items = nil
+	a.hourlyWage = ""
+	a.defaultWaitPreset = defaultWaitPreset("")
+	a.defaultWaitCustomHours = ""
+	a.ntfyURL = ""
+	a.ntfyTopic = ""
+	a.currency = ""
+	a.profileExists = false
+	a.nextID = 1
+	a.mu.Unlock()
+
+	http.SetCookie(w, &http.Cookie{Name: "active_profile", Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: -1})
+	http.Redirect(w, r, "/switch-profile", http.StatusSeeOther)
 }
 
 func (a *App) legacyProfile(w http.ResponseWriter, r *http.Request) {

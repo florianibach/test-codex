@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -2201,4 +2202,94 @@ func newSQLiteTestApp(t *testing.T) (*App, func()) {
 		}
 	}
 	return app, cleanup
+}
+
+func TestDeleteProfileRemovesActiveProfileAndRedirectsToSwitch(t *testing.T) {
+	app, cleanup := newSQLiteTestApp(t)
+	defer cleanup()
+
+	app.mu.Lock()
+	app.activeUserID = "KeepMe"
+	app.hourlyWage = "28"
+	if err := app.persistProfileLocked(); err != nil {
+		app.mu.Unlock()
+		t.Fatalf("persist KeepMe profile: %v", err)
+	}
+	app.activeUserID = "DeleteMe"
+	app.hourlyWage = "35"
+	if err := app.persistProfileLocked(); err != nil {
+		app.mu.Unlock()
+		t.Fatalf("persist DeleteMe profile: %v", err)
+	}
+	item := Item{Title: "delete-me-item", Status: "Waiting", WaitPreset: "24h", PurchaseAllowedAt: time.Now().Add(24 * time.Hour), CreatedAt: time.Now()}
+	if err := app.insertItemLocked(&item); err != nil {
+		app.mu.Unlock()
+		t.Fatalf("insert DeleteMe item: %v", err)
+	}
+	app.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodPost, "/settings/profile/delete", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected redirect, got %d", rr.Code)
+	}
+	if got := rr.Header().Get("Location"); got != "/switch-profile" {
+		t.Fatalf("expected redirect to /switch-profile, got %q", got)
+	}
+	if got := rr.Header().Get("Set-Cookie"); !strings.Contains(got, "active_profile=") {
+		t.Fatalf("expected active_profile cookie to be cleared, got %q", got)
+	}
+
+	names, err := app.listProfileNames()
+	if err != nil {
+		t.Fatalf("list profiles: %v", err)
+	}
+	if slices.Contains(names, "DeleteMe") {
+		t.Fatalf("expected deleted profile to be absent from profile list")
+	}
+
+	switchReq := httptest.NewRequest(http.MethodGet, "/switch-profile", nil)
+	switchRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(switchRR, switchReq)
+	if switchRR.Code != http.StatusOK {
+		t.Fatalf("expected switch page 200, got %d", switchRR.Code)
+	}
+	if body := switchRR.Body.String(); strings.Contains(body, "DeleteMe") {
+		t.Fatalf("expected deleted profile to be absent from switch page")
+	}
+}
+
+func TestDeleteProfileBlocksDeletingLastRemainingProfile(t *testing.T) {
+	app, cleanup := newSQLiteTestApp(t)
+	defer cleanup()
+
+	app.mu.Lock()
+	app.activeUserID = "OnlyOne"
+	app.hourlyWage = "25"
+	if err := app.persistProfileLocked(); err != nil {
+		app.mu.Unlock()
+		t.Fatalf("persist OnlyOne profile: %v", err)
+	}
+	app.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodPost, "/settings/profile/delete", nil)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusConflict {
+		t.Fatalf("expected 409 conflict, got %d", rr.Code)
+	}
+	if body := rr.Body.String(); !strings.Contains(body, "cannot be deleted") {
+		t.Fatalf("expected blocking error in response body")
+	}
+
+	names, err := app.listProfileNames()
+	if err != nil {
+		t.Fatalf("list profiles: %v", err)
+	}
+	if !slices.Contains(names, "OnlyOne") {
+		t.Fatalf("expected only profile to still exist")
+	}
 }
