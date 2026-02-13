@@ -1970,6 +1970,56 @@ func TestSwitchProfilePageRendersExistingProfiles(t *testing.T) {
 	}
 }
 
+func TestSwitchProfileNewProfileRedirectsToSettingsAndResetsProfileDefaults(t *testing.T) {
+	app, cleanup := newSQLiteTestApp(t)
+	defer cleanup()
+
+	app.mu.Lock()
+	app.activeUserID = "Alice"
+	app.hourlyWage = "55"
+	app.currency = "CHF"
+	app.defaultWaitPreset = "custom"
+	app.defaultWaitCustomHours = "9"
+	if err := app.persistProfileLocked(); err != nil {
+		app.mu.Unlock()
+		t.Fatalf("persist Alice profile: %v", err)
+	}
+	app.mu.Unlock()
+
+	form := url.Values{"profile_name": {"BrandNew"}}
+	req := httptest.NewRequest(http.MethodPost, "/switch-profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected redirect, got %d", rr.Code)
+	}
+	if got := rr.Header().Get("Location"); got != "/settings/profile" {
+		t.Fatalf("expected redirect to /settings/profile for new profile, got %q", got)
+	}
+
+	settingsReq := httptest.NewRequest(http.MethodGet, "/settings/profile", nil)
+	for _, c := range rr.Result().Cookies() {
+		settingsReq.AddCookie(c)
+	}
+	settingsRR := httptest.NewRecorder()
+	app.Handler().ServeHTTP(settingsRR, settingsReq)
+	if settingsRR.Code != http.StatusOK {
+		t.Fatalf("expected settings page 200, got %d", settingsRR.Code)
+	}
+	body := settingsRR.Body.String()
+	if strings.Contains(body, "value=\"55\"") {
+		t.Fatalf("expected hourly wage to be reset for brand new profile")
+	}
+	if strings.Contains(body, "value=\"CHF\"") {
+		t.Fatalf("expected currency to be reset for brand new profile")
+	}
+	if !strings.Contains(body, "<option value=\"24h\" selected>") {
+		t.Fatalf("expected default wait preset to reset to 24h")
+	}
+}
+
 func TestSwitchProfileChangesContextAndSetsCookie(t *testing.T) {
 	app, cleanup := newSQLiteTestApp(t)
 	defer cleanup()

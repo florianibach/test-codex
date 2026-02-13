@@ -1178,7 +1178,11 @@ func (a *App) listProfileNames() ([]string, error) {
 		return []string{a.activeProfileName()}, nil
 	}
 
-	rows, err := db.Query(`SELECT user_id FROM profiles ORDER BY user_id COLLATE NOCASE`)
+	rows, err := db.Query(`SELECT user_id FROM (
+	SELECT user_id FROM profiles
+	UNION
+	SELECT user_id FROM items
+) ORDER BY user_id COLLATE NOCASE`)
 	if err != nil {
 		return nil, fmt.Errorf("list profile names: %w", err)
 	}
@@ -1231,8 +1235,13 @@ func (a *App) switchProfile(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "could not switch profile", http.StatusInternalServerError)
 			return
 		}
+		needsProfileSetup := strings.TrimSpace(a.hourlyWage) == ""
 		a.mu.Unlock()
 		http.SetCookie(w, &http.Cookie{Name: "active_profile", Value: name, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode})
+		if needsProfileSetup {
+			http.Redirect(w, r, "/settings/profile", http.StatusSeeOther)
+			return
+		}
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

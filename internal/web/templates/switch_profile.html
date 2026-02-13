@@ -11,13 +11,23 @@
     <form method="post" action="/switch-profile" class="vstack gap-3">
       <div>
         <label for="profile_name" class="form-label">Profile name</label>
-        <input id="profile_name" name="profile_name" list="profile-names" type="text" class="form-control" placeholder="e.g. Alex" value="{{.SelectedName}}" required />
-        <datalist id="profile-names">
-          {{range .Names}}<option value="{{.}}"></option>{{end}}
-        </datalist>
+        <input id="profile_name" name="profile_name" type="text" class="form-control" placeholder="e.g. Alex" value="{{.SelectedName}}" required />
       </div>
       <button class="btn btn-outline-primary" type="submit">Continue</button>
     </form>
+
+    {{if .Names}}
+    <hr class="my-4" />
+    <p class="small text-secondary mb-2">Existing profiles</p>
+    <div class="d-flex flex-wrap gap-2">
+      {{range .Names}}
+      <form method="post" action="/switch-profile" class="d-inline">
+        <input type="hidden" name="profile_name" value="{{.}}" />
+        <button class="btn btn-sm btn-outline-secondary" type="submit">{{.}}</button>
+      </form>
+      {{end}}
+    </div>
+    {{end}}
   </div>
 </section>
 {{end}}

@@ -104,6 +104,12 @@ func (a *App) loadStateFromDB(userID string) error {
 
 	a.items = nil
 	a.nextID = 1
+	a.hourlyWage = ""
+	a.currency = ""
+	a.defaultWaitPreset = defaultWaitPreset("")
+	a.defaultWaitCustomHours = ""
+	a.ntfyURL = ""
+	a.ntfyTopic = ""
 
 	row := a.db.QueryRow(`SELECT hourly_wage, currency, default_wait_preset, default_wait_custom_hours, ntfy_endpoint, ntfy_topic FROM profiles WHERE user_id = ?`, userID)
 	var hourlyWage, currency, defaultPreset, defaultCustomHours, ntfyEndpoint, ntfyTopic string
