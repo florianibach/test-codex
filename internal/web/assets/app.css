@@ -338,6 +338,43 @@ details > summary { cursor: pointer; }
 .btn-outline-danger { color: #b53a4f; border-color: #e8aeb8; background: #fff; }
 .btn-outline-danger:hover { color: #fff; background-color: var(--danger); border-color: var(--danger); text-decoration: none; }
 
+
+.item-entry {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: .75rem 1rem;
+  flex-wrap: wrap;
+}
+
+.item-main {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+.item-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+}
+
+.item-title {
+  min-width: 0;
+}
+
+.item-title-row .badge {
+  flex-shrink: 0;
+}
+
+.item-side {
+  margin-left: auto;
+  min-width: 12.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
 .item-actions {
   display: flex;
   justify-content: flex-end;
@@ -437,6 +474,11 @@ summary:focus-visible {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .item-side {
+    width: 100%;
+    min-width: 0;
   }
 }
 

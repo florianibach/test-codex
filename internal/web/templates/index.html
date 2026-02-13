@@ -77,15 +77,17 @@
     <ul class="list-group list-group-flush">
       {{range .Items}}
       <li class="list-group-item px-0">
-        <div class="d-flex justify-content-between align-items-start gap-3 wrap-sm">
-          <div>
-            <p class="fw-semibold mb-1">{{.Title}}</p>
+        <div class="item-entry">
+          <div class="item-main">
+            <div class="item-title-row mb-1">
+              <p class="fw-semibold mb-0 item-title">{{.Title}}</p>
+              <span class="badge {{statusBadgeClass .Status}}">{{.Status}}</span>
+            </div>
             {{if .Note}}<p class="small text-secondary mb-1">{{.Note}}</p>{{end}}
             {{if .Tags}}<p class="small text-secondary mb-1">Tags: {{.Tags}}</p>{{end}}
             {{if .Link}}<a class="small" href="{{.Link}}" target="_blank" rel="noreferrer">Open link</a>{{end}}
           </div>
-          <div class="text-end">
-            <span class="badge {{statusBadgeClass .Status}}">{{.Status}}</span>
+          <div class="item-side text-end">
             {{if .Price}}<p class="small text-secondary mb-0 mt-1">{{$.Currency}} {{.Price}}</p>{{end}}
             {{if .Price}}
             {{if workHoursAvailable . $.HourlyWage $.HasHourlyWage}}
