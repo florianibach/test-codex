@@ -2278,7 +2278,7 @@ func TestAboutShowsActiveProfileInHeader(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rr.Code)
 	}
-	if body := rr.Body.String(); !strings.Contains(body, "Profile: Test") {
+	if body := rr.Body.String(); !strings.Contains(body, `<span class="profile-badge">Test</span>`) {
 		t.Fatalf("expected active profile in about header")
 	}
 }
