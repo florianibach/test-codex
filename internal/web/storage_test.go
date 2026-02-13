@@ -63,6 +63,9 @@ func TestNewAppWithSQLiteCreatesSchemaAndPersistsData(t *testing.T) {
 	if body := settingsRR.Body.String(); !strings.Contains(body, "value=\"35\"") {
 		t.Fatalf("expected persisted profile hourly wage after reload")
 	}
+	if body := settingsRR.Body.String(); !strings.Contains(body, "value=\"EUR\"") {
+		t.Fatalf("expected persisted profile currency after reload")
+	}
 }
 
 func TestDeleteItemPersistsInSQLite(t *testing.T) {

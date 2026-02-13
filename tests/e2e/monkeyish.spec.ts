@@ -69,3 +69,59 @@ test('R1-005 monkeyish: random-ish interactions keep insights stable', async ({ 
   expect(consoleErrors, `Console errors found: ${consoleErrors.join('\n')}`).toEqual([]);
   expect(httpErrors, `HTTP 4xx/5xx responses found: ${httpErrors.join('\n')}`).toEqual([]);
 });
+
+test('R1-008 monkeyish: currency flips keep money rendering stable across app areas', async ({ page }) => {
+  const consoleErrors: string[] = [];
+  const httpErrors: string[] = [];
+
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') {
+      consoleErrors.push(msg.text());
+    }
+  });
+
+  page.on('response', (response) => {
+    if (response.status() >= 400) {
+      httpErrors.push(`${response.status()} ${response.url()}`);
+    }
+  });
+
+  await ensureProfileConfigured(page);
+
+  const currencies = ['CHF', '$', 'EUR', '€'] as const;
+  let seed = 42;
+  const next = () => {
+    seed = (seed * 1664525 + 1013904223) % 4294967296;
+    return seed;
+  };
+
+  for (let i = 0; i < 4; i += 1) {
+    const selectedCurrency = currencies[next() % currencies.length];
+
+    await page.goto('/settings/profile');
+    await page.getByLabel('Currency').fill(selectedCurrency);
+    await page.getByRole('button', { name: 'Save profile' }).click();
+    await expect(page.getByText('Profile saved.')).toBeVisible();
+
+    await page.goto('/items/new');
+    await expect(page.getByText(`Currency: ${selectedCurrency}`)).toBeVisible();
+
+    const title = uniqueTitle(`R1-008 monkeyish ${i}`);
+    await page.getByLabel('Title *').fill(title);
+    await page.getByLabel('Price').fill(String((next() % 90) + 10));
+    await page.getByLabel('Wait time').selectOption('custom');
+    await page.getByLabel('Custom hours').fill('0.002');
+    await page.getByRole('button', { name: 'Add to waitlist' }).click();
+
+    await page.goto('/');
+    const row = page.locator('li.list-group-item').filter({ hasText: title }).first();
+    await expect(row).toContainText(selectedCurrency);
+  }
+
+  await page.goto('/insights');
+  await expect(page.getByRole('heading', { name: 'Insights' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Saved amount trend' })).toBeVisible();
+
+  expect(consoleErrors, `Console errors found: ${consoleErrors.join('\n')}`).toEqual([]);
+  expect(httpErrors, `HTTP 4xx/5xx responses found: ${httpErrors.join('\n')}`).toEqual([]);
+});
