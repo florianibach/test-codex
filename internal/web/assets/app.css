@@ -45,11 +45,12 @@ a:hover { text-decoration: underline; }
 }
 
 .nav-container {
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: .65rem;
-  padding-bottom: .65rem;
+  gap: .75rem;
+  padding: .65rem 1rem;
 }
 
 .navbar-brand {
@@ -307,10 +308,40 @@ summary:focus-visible {
   outline-offset: 2px;
 }
 
-@media (max-width: 640px) {
-  .navbar-nav {
+@media (max-width: 900px) {
+  .nav-container {
     flex-wrap: wrap;
-    justify-content: flex-end;
+    align-items: flex-start;
+  }
+
+  .navbar-nav {
+    order: 3;
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    row-gap: .5rem;
+  }
+
+  .nav-link {
+    padding: .4rem .6rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .container {
+    width: calc(100% - 1.25rem);
+  }
+
+  .nav-container {
+    padding: .6rem .625rem;
+  }
+
+  .navbar-brand {
+    width: 100%;
+  }
+
+  .small.text-secondary {
+    width: 100%;
   }
 }
 
