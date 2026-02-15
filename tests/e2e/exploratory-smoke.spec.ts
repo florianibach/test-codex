@@ -26,6 +26,7 @@ test.describe('MVP mobile flow', () => {
     hasTouch: true,
   });
 
+  // User Story: MVP-001 — Item minimal anlegen (mobile-first Add-Flow)
   test('add flow stays within interaction and time budget on mobile', async ({ page }) => {
     let interactionCount = 0;
     const maxInteractions = 3;
@@ -57,6 +58,7 @@ test.describe('MVP mobile flow', () => {
 
 
 
+// User Story: R1-004 — Liste bei 100+ Items: Suche, Filter, Sortierung
 test('dashboard filter panel is collapsed by default and opens on demand', async ({ page }) => {
   await ensureProfileConfigured(page);
   await page.goto('/');
@@ -69,6 +71,7 @@ test('dashboard filter panel is collapsed by default and opens on demand', async
 });
 
 
+// User Story: R1-004 — Liste bei 100+ Items: Suche, Filter, Sortierung
 test('dashboard all status shortcut selects all filters and keeps panel open', async ({ page }) => {
   await ensureProfileConfigured(page);
 
@@ -85,6 +88,7 @@ test('dashboard all status shortcut selects all filters and keeps panel open', a
   await expect(page.locator('details.mb-3').first()).toHaveAttribute('open', '');
 });
 
+// User Story: R1-004 — Liste bei 100+ Items: Suche, Filter, Sortierung
 test('dashboard search, tag filter, and price sort work together', async ({ page }) => {
   await ensureProfileConfigured(page);
 
@@ -133,6 +137,7 @@ test('dashboard search, tag filter, and price sort work together', async ({ page
 
 
 
+// User Story: R1-007 — Tags als Dropdown statt nur Freitext
 test('R1-007 tags use badge selection and can be managed in dedicated settings', async ({ page }) => {
   await ensureProfileConfigured(page);
 
@@ -166,6 +171,7 @@ test('R1-007 tags use badge selection and can be managed in dedicated settings',
   await expect(page.locator('span.status-filter-badge', { hasText: 'Gift' })).toHaveCount(0);
 });
 
+// User Story: R1-004 — Liste bei 100+ Items: Suche, Filter, Sortierung
 test('dashboard search matches title and link fields explicitly', async ({ page }) => {
   await ensureProfileConfigured(page);
 
@@ -199,6 +205,7 @@ test('dashboard search matches title and link fields explicitly', async ({ page 
   await expect(page.locator('li.list-group-item').filter({ hasText: titleMatch })).toHaveCount(0);
 });
 
+// User Story: R1-004.1 — Default-Statusauswahl und „Next ready“-Reihenfolge
 test('dashboard default sorting is next ready to buy (purchase time ascending)', async ({ page }) => {
   await ensureProfileConfigured(page);
 
@@ -226,6 +233,7 @@ test('dashboard default sorting is next ready to buy (purchase time ascending)',
   expect(earlierIndex).toBeLessThan(laterIndex);
 });
 
+// User Story: R1-004 — Liste bei 100+ Items: Suche, Filter, Sortierung
 test('dashboard keeps combined search, status filter and sort consistent after reload', async ({ page }) => {
   await ensureProfileConfigured(page);
 
@@ -278,6 +286,8 @@ test('dashboard keeps combined search, status filter and sort consistent after r
   await expect(page.locator('li.list-group-item').filter({ hasText: includeTitle })).toHaveCount(1);
   await expect(page.locator('li.list-group-item').filter({ hasText: excludeTitle })).toHaveCount(0);
 });
+// User Story: MVP-008 — Lokale Persistenz & Self-hosted Betriebsfähigkeit (AC1: App erreichbar)
+// Hinweis: Technischer Querschnitts-Smoke-Test für Navigation/Console/HTTP-Fehler.
 test('exploratory smoke suite: navigation, console, and HTTP errors', async ({ page }) => {
   const consoleErrors: string[] = [];
   const httpErrors: string[] = [];
@@ -312,6 +322,7 @@ test('exploratory smoke suite: navigation, console, and HTTP errors', async ({ p
   expect(httpErrors, `HTTP 4xx/5xx responses found: ${httpErrors.join('\n')}`).toEqual([]);
 });
 
+// User Story: MVP-001 — Item minimal anlegen (mobile-first Add-Flow)
 test('title-only add flow creates waiting item', async ({ page }) => {
   await ensureProfileConfigured(page);
   await page.goto('/items/new');
@@ -326,6 +337,7 @@ test('title-only add flow creates waiting item', async ({ page }) => {
   await expect(newItemRow).not.toContainText('Work hours:');
 });
 
+// User Story: MVP-001 — Item minimal anlegen (mobile-first Add-Flow)
 test('empty title shows validation', async ({ page }) => {
   await page.goto('/items/new');
 
@@ -335,6 +347,7 @@ test('empty title shows validation', async ({ page }) => {
   await expect(page.getByRole('alert')).toContainText('Please enter a title.');
 });
 
+// User Story: MVP-002 — Wartezeit-Auswahl inkl. Custom
 test('custom wait duration validates invalid values', async ({ page }) => {
   await page.goto('/items/new');
 
@@ -352,6 +365,7 @@ test('custom wait duration validates invalid values', async ({ page }) => {
   await expect(page.getByRole('alert')).toContainText('valid number of custom hours');
 });
 
+// User Story: MVP-004 — Profil mit Stundenlohn (Single User, lokal)
 test('profile validates invalid hourly wage', async ({ page }) => {
   await page.goto('/settings/profile');
 
@@ -366,6 +380,7 @@ test('profile validates invalid hourly wage', async ({ page }) => {
   await expect(page.getByRole('alert')).toContainText('valid hourly wage');
 });
 
+// User Story: MVP-005 — Reality-Check: Arbeitsstunden pro Item
 test('reality check shows work hours and updates after wage change', async ({ page }) => {
   const title = uniqueTitle('Reality');
 
@@ -393,6 +408,7 @@ test('reality check shows work hours and updates after wage change', async ({ pa
 });
 
 
+// User Story: R1-001 — Item bearbeiten
 test('edit flow updates item and cancel keeps unchanged', async ({ page }) => {
   await ensureProfileConfigured(page);
   await page.goto('/items/new');
@@ -425,6 +441,7 @@ test('edit flow updates item and cancel keeps unchanged', async ({ page }) => {
 
 
 
+// User Story: MVP-002 — Wartezeit-Auswahl inkl. Custom
 test('specific date input is only shown when wait time is set to specific date', async ({ page }) => {
   await ensureProfileConfigured(page);
   await page.goto('/items/new');
@@ -439,6 +456,7 @@ test('specific date input is only shown when wait time is set to specific date',
   await expect(buyAfterInput).toBeHidden();
 });
 
+// User Story: R1-001 — Item bearbeiten
 test('editing a skipped item with future wait time reopens it as waiting', async ({ page }) => {
   await ensureProfileConfigured(page);
   await page.goto('/items/new');
@@ -471,6 +489,7 @@ test('editing a skipped item with future wait time reopens it as waiting', async
 
 
 
+// User Story: R1-003 — Snooze / Wartezeit verlängern
 test('snooze +24h is only available for ready items and immediately moves the item back to waiting', async ({ page }) => {
   await ensureProfileConfigured(page);
   await page.goto('/items/new');
@@ -525,6 +544,7 @@ async function readInsightsMetrics(page: Page) {
 }
 
 
+// User Story: R1-002 — Item löschen
 test('delete flow supports cancel and removes item from dashboard and insights on confirm', async ({ page }) => {
   await ensureProfileConfigured(page);
   await page.goto('/insights');
@@ -608,6 +628,7 @@ async function waitForItemStatus(page: Page, title: string, status: string) {
   return page.locator('li.list-group-item').filter({ hasText: title }).first();
 }
 
+// User Story: MVP-003 — Status-Automatik und manuelle Entscheidung
 test('item auto-promotes to Ready to buy after wait time elapsed', async ({ page }) => {
   await ensureProfileConfigured(page);
   await page.goto('/items/new');
@@ -624,6 +645,7 @@ test('item auto-promotes to Ready to buy after wait time elapsed', async ({ page
   await expect(itemRow.getByRole('button', { name: 'Mark as skipped' })).toBeVisible();
 });
 
+// User Story: R1-008 — Währung im Profil hinterlegen und konsistent anzeigen
 test('R1-008 currency from profile is used in forms, list and insights with euro fallback', async ({ page }) => {
   await ensureProfileConfigured(page);
 
@@ -657,6 +679,7 @@ test('R1-008 currency from profile is used in forms, list and insights with euro
 });
 
 
+// User Story: R1-006 — Leichtgewichtiges Mehrbenutzer-Modell ohne Login
 test('R1-006: new profile redirects to settings with reset defaults', async ({ page }) => {
   const profileA = uniqueName('Alice');
   const profileB = uniqueName('BrandNew');
@@ -681,6 +704,7 @@ test('R1-006: new profile redirects to settings with reset defaults', async ({ p
   await expect(page.getByLabel('Default wait time')).toHaveValue('24h');
 });
 
+// User Story: R1-006 — Leichtgewichtiges Mehrbenutzer-Modell ohne Login
 test('R1-006: switch-profile page lists existing profiles as quick actions', async ({ page }) => {
   const profileA = uniqueName('QuickA');
   const profileB = uniqueName('QuickB');
@@ -708,6 +732,7 @@ test('R1-006: switch-profile page lists existing profiles as quick actions', asy
   await expect(page.getByLabel('Currency')).toHaveValue('EUR');
 });
 
+// User Story: R1-006 — Leichtgewichtiges Mehrbenutzer-Modell ohne Login
 test('R1-006: profile name can be renamed in settings', async ({ page }) => {
   const profileA = uniqueName('RenameA');
   const profileB = uniqueName('RenameB');
@@ -727,6 +752,7 @@ test('R1-006: profile name can be renamed in settings', async ({ page }) => {
   await expect(page.getByRole('button', { name: profileA })).toHaveCount(0);
 });
 
+// User Story: R1-006.1 — Profile löschen
 test('R1-006.1: delete profile removes it and redirects to profile switch', async ({ page }) => {
   const profileKeep = uniqueName('KeepProfile');
   const profileDelete = uniqueName('DeleteProfile');
@@ -753,6 +779,7 @@ test('R1-006.1: delete profile removes it and redirects to profile switch', asyn
 });
 
 
+// User Story: R1-006.1 — Profile löschen
 test('R1-006.1: cancel delete keeps profile and data unchanged', async ({ page }) => {
   const profileKeep = uniqueName('KeepProfileCancel');
   const profileCancel = uniqueName('CancelProfile');

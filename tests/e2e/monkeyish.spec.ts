@@ -9,6 +9,7 @@ async function ensureProfileConfigured(page: Page) {
   await expect(page.getByText('Profile saved.')).toBeVisible();
 }
 
+// User Story: R1-005 — Erweiterte Insights mit Trendfokus
 test('R1-005 monkeyish: random-ish interactions keep insights stable', async ({ page }) => {
   const consoleErrors: string[] = [];
   const httpErrors: string[] = [];
@@ -70,6 +71,7 @@ test('R1-005 monkeyish: random-ish interactions keep insights stable', async ({ 
   expect(httpErrors, `HTTP 4xx/5xx responses found: ${httpErrors.join('\n')}`).toEqual([]);
 });
 
+// User Story: R1-008 — Währung im Profil hinterlegen und konsistent anzeigen
 test('R1-008 monkeyish: currency flips keep money rendering stable across app areas', async ({ page }) => {
   const consoleErrors: string[] = [];
   const httpErrors: string[] = [];
@@ -126,6 +128,7 @@ test('R1-008 monkeyish: currency flips keep money rendering stable across app ar
   expect(httpErrors, `HTTP 4xx/5xx responses found: ${httpErrors.join('\n')}`).toEqual([]);
 });
 
+// User Story: R1-007 — Tags als Dropdown statt nur Freitext
 test('R1-007 monkeyish: tag management and badge-based filtering stay stable', async ({ page }) => {
   const consoleErrors: string[] = [];
   const httpErrors: string[] = [];
