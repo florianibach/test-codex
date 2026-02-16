@@ -1,115 +1,139 @@
-# Impulse Pause – MVP (Go)
+# Impulse Pause
 
-**Impulse Pause** is a lightweight web app that helps reduce impulse purchases.
-You park a purchase idea on a waitlist, set a waiting period, and decide later with a clearer head whether to buy.
+[![CI](https://github.com/florianibach/impulse-pause/actions/workflows/ci.yml/badge.svg)](https://github.com/florianibach/impulse-pause/actions/workflows/ci.yml)
+[![Docker Image](https://github.com/florianibach/impulse-pause/actions/workflows/docker-image.yml/badge.svg)](https://github.com/florianibach/impulse-pause/actions/workflows/docker-image.yml)
+[![Docker Hub Description](https://github.com/florianibach/impulse-pause/actions/workflows/dockerhub-description.yml/badge.svg)](https://github.com/florianibach/impulse-pause/actions/workflows/dockerhub-description.yml)
 
-This repository includes a runnable MVP baseline with:
+[GitHub Repo](https://github.com/florianibach/impulse-pause)  
+[DockerHub Repo](https://hub.docker.com/r/florianibach/impulse-pause)
 
-- Go web server (Dashboard, Item creation, Insights, Settings, Health)
-- Docker + Docker Compose for local startup
-- Go unit tests
-- Playwright E2E including an **exploratory smoke suite**
-- GitHub Actions CI
+pullpulse is a lightweight, self-hosted watcher for Docker Hub repository pull counts.
 
-## What is the app for?
+This project is built and maintained in my free time.
+If it helps you or saves you some time, you can support my work on [BuyMeACoffee](https://buymeacoffee.com/florianibach)
 
-The app helps you slow down spontaneous buying decisions:
+Thank you for your support!
 
-1. Capture an item (title, optional price/link/tags/note)
-2. Set a waiting period (e.g., 24h, 7 days, 30 days, or custom)
-3. After the wait, decide intentionally: **Bought** or **Skipped**
-4. Use Insights to see how many purchases you skipped and how much money you saved
+## Overview
 
-You can also store your net hourly wage in settings.
-Then the app shows a "Work hours" perspective for priced items.
+Impulse Pause is a lightweight web app that helps reduce impulse purchases.
+You park a purchase idea on a waiting list, set a waiting period, and decide later with a clearer head whether to buy.
 
-## Technology decision
+## Features
 
-For this MVP, **Go** was chosen (C# would also have been possible), because a lean setup with fast build and test cycles was preferred.
+- Capture items (title, optional price, link, tags, note)
+- Set waiting periods (24h, 7 days, 30 days, or custom)
+- Decide after the waiting period: Bought or Skipped
+- Insights for skipped purchases and saved money
+- Optional work-hours perspective based on net hourly wage
+- Optional ntfy notifications in profile settings
 
-## Prerequisites
+## Tech Stack
+
+- Backend: Go (net/http)
+- UI: Server-rendered HTML templates + CSS
+- Storage: SQLite
+- Tests: Go tests + Playwright E2E
+- Runtime: Docker + Docker Compose
+
+## Getting Started
+
+### Prerequisites
 
 - Go 1.22+
 - Node.js 20+
 - npm
-- Docker + Docker Compose
+- Docker + Docker Compose (optional)
 
-## Quick Start
-
-If you just want to run it quickly:
+### Run locally with Go
 
 ```bash
 go run ./cmd/server
 ```
 
-Then open in your browser: http://127.0.0.1:8080
+Open: <http://127.0.0.1:8080>
 
-## Local startup (detailed)
-
-### Run directly with Go
-
-```bash
-go run ./cmd/server
-```
-
-Optional with a custom DB file:
+Optional custom DB path:
 
 ```bash
 DB_PATH=./data/app.db go run ./cmd/server
 ```
 
-App: http://127.0.0.1:8080
+### Docker Compose quickstart example
 
-### Run with Docker Compose
+```yaml
+# docker-compose.quickstart.yml
+services:
+  app:
+    build: .
+    container_name: impulse-pause
+    ports:
+      - "8080:8080"
+    environment:
+      DB_PATH: /app/data/app.db
+      ADDR: :8080
+    volumes:
+      - impulse-pause-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  impulse-pause-data:
+```
+
+Start:
+
+```bash
+docker compose -f docker-compose.quickstart.yml up --build -d
+```
+
+Logs:
+
+```bash
+docker compose -f docker-compose.quickstart.yml logs -f
+```
+
+Stop:
+
+```bash
+docker compose -f docker-compose.quickstart.yml down
+```
+
+You can also use the repository default compose file:
 
 ```bash
 docker compose up --build
 ```
 
-App: http://127.0.0.1:8080
+## Application Routes
 
-SQLite DB (persisted via Docker volume): `app-data` at `/app/data/app.db`.
+- `/` Dashboard with search, filter, and sorting
+- `/items/new` Create a new purchase idea
+- `/insights` Overview for skipped items, savings, and top categories
+- `/settings/profile` Hourly wage and notification settings
+- `/health` Health endpoint
 
-## App flow at a glance
+## Testing
 
-- **Dashboard (`/`)**: All captured items with status, price, "Buy after" timestamp plus search, status/tag filters and sorting
-- **Add item (`/items/new`)**: Capture a new purchase idea and set a waiting period
-- **Insights (`/insights`)**: Overview of skips, saved amount, and top categories
-- **Settings (`/settings/profile`)**: Net hourly wage and optional ntfy notification settings
-
-## Running tests
-
-### Go unit tests
+### Go tests
 
 ```bash
 go test ./...
 ```
 
-### Optional: Docker Compose integration check (MVP-008 AC1/AC2)
-
-Requires a local Docker installation:
+### Docker Compose integration test (optional)
 
 ```bash
 RUN_DOCKER_TESTS=1 go test ./cmd/server -run TestDockerComposeAppReachableAndPersistsDataAcrossRestart -v
 ```
 
-### Playwright E2E (exploratory smoke suite)
+### Playwright E2E
 
-Install:
+Install dependencies:
 
 ```bash
 npm ci
 npm run setup:e2e:deps
 ```
-
-If your environment reports missing browser runtime libraries (for example `libatk-1.0.so.0`) or Chromium crashes in headless mode, run the dependency step again after `apt` metadata refresh:
-
-```bash
-sudo apt-get update
-npx playwright install --with-deps chromium
-```
-
-On Ubuntu 24.04 the package name is `libatk1.0-0t64` (not `libatk1.0-0`), and Playwright installs the correct `t64` variants automatically when using `--with-deps`.
 
 Run smoke suite:
 
@@ -117,27 +141,30 @@ Run smoke suite:
 npm run test:e2e:smoke
 ```
 
-Run monkeyish robustness suite:
+Run monkeyish suite:
 
 ```bash
 npm run test:e2e:monkeyish
 ```
 
-The smoke suite checks:
+Run all E2E tests:
 
-- Navigation across pages
-- Browser console errors
-- HTTP responses with 4xx/5xx status codes
+```bash
+npm run test:e2e
+```
 
-## CI (GitHub Actions)
+## CI/CD
 
-Workflow: `.github/workflows/ci.yml`
+- CI workflow: `.github/workflows/ci.yml`
+- Docker image workflow: `.github/workflows/docker-image.yml`
+- Docker Hub description workflow: `.github/workflows/dockerhub-description.yml`
 
-Pipeline steps:
+## Build and run Docker image locally
 
-1. Go setup
-2. `go test ./...`
-3. Node setup + `npm ci`
-4. Playwright browser install (Chromium)
-5. `npm run test:e2e:smoke` (with 1 retry in CI so traces are generated for flakes)
-6. Upload `playwright-report/` and `test-results/` as CI artifacts
+```bash
+docker build -t impulse-pause:local .
+```
+
+```bash
+docker run --rm -p 8080:8080 impulse-pause:local
+```
