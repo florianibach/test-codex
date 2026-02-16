@@ -1,143 +1,185 @@
-# Impulse Pause – MVP (Go)
+# Impulse Pause
 
-**Impulse Pause** is a lightweight web app that helps reduce impulse purchases.
-You park a purchase idea on a waitlist, set a waiting period, and decide later with a clearer head whether to buy.
+[![CI](https://github.com/florianibach/impulse-pause/actions/workflows/ci.yml/badge.svg)](https://github.com/florianibach/impulse-pause/actions/workflows/ci.yml)
+[![Docker](https://github.com/florianibach/impulse-pause/actions/workflows/docker.yml/badge.svg)](https://github.com/florianibach/impulse-pause/actions/workflows/docker.yml)
 
-This repository includes a runnable MVP baseline with:
+**Impulse Pause** hilft dir dabei, Impulskäufe bewusst zu entschleunigen.
+Statt sofort zu kaufen, parkst du Ideen auf einer Warteliste, setzt eine Wartezeit und entscheidest später mit klarem Kopf.
 
-- Go web server (Dashboard, Item creation, Insights, Settings, Health)
-- Docker + Docker Compose for local startup
-- Go unit tests
-- Playwright E2E including an **exploratory smoke suite**
-- GitHub Actions CI
+> Bilder, UI-Screenshots und Demo-GIFs kannst du hier später einfach ergänzen.
 
-## What is the app for?
+---
 
-The app helps you slow down spontaneous buying decisions:
+## ✨ Features
 
-1. Capture an item (title, optional price/link/tags/note)
-2. Set a waiting period (e.g., 24h, 7 days, 30 days, or custom)
-3. After the wait, decide intentionally: **Bought** or **Skipped**
-4. Use Insights to see how many purchases you skipped and how much money you saved
+- 📥 Kaufideen erfassen (Titel, Preis, Link, Tags, Notiz)
+- ⏱️ Wartezeit setzen (z. B. 24h, 7 Tage, 30 Tage oder individuell)
+- ✅ Nach Ablauf bewusst entscheiden: **Gekauft** oder **Übersprungen**
+- 📊 Insights mit gespartem Betrag und Kategorien
+- 💶 Optionale Perspektive: Preis in **Arbeitsstunden** (über Netto-Stundenlohn)
+- 🔔 Optional ntfy-Benachrichtigungen (konfigurierbar in den Einstellungen)
 
-You can also store your net hourly wage in settings.
-Then the app shows a "Work hours" perspective for priced items.
+---
 
-## Technology decision
+## 🧰 Tech Stack
 
-For this MVP, **Go** was chosen (C# would also have been possible), because a lean setup with fast build and test cycles was preferred.
+- **Backend:** Go (net/http)
+- **Templates/UI:** Server-rendered HTML + CSS
+- **Datenbank:** SQLite
+- **Tests:** Go-Tests + Playwright E2E
+- **Container:** Docker + Docker Compose
 
-## Prerequisites
+---
+
+## 🚀 Getting Started
+
+### Voraussetzungen
 
 - Go 1.22+
 - Node.js 20+
 - npm
-- Docker + Docker Compose
+- Docker + Docker Compose (optional, aber empfohlen)
 
-## Quick Start
-
-If you just want to run it quickly:
+### 1) Lokal direkt mit Go starten
 
 ```bash
 go run ./cmd/server
 ```
 
-Then open in your browser: http://127.0.0.1:8080
+App öffnen: <http://127.0.0.1:8080>
 
-## Local startup (detailed)
-
-### Run directly with Go
-
-```bash
-go run ./cmd/server
-```
-
-Optional with a custom DB file:
+Optional mit eigenem DB-Pfad:
 
 ```bash
 DB_PATH=./data/app.db go run ./cmd/server
 ```
 
-App: http://127.0.0.1:8080
+### 2) Getting Started mit Docker Compose (Beispiel)
 
-### Run with Docker Compose
+```yaml
+# docker-compose.quickstart.yml
+services:
+  app:
+    build: .
+    container_name: impulse-pause
+    ports:
+      - "8080:8080"
+    environment:
+      DB_PATH: /app/data/app.db
+      ADDR: :8080
+    volumes:
+      - impulse-pause-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  impulse-pause-data:
+```
+
+Starten:
+
+```bash
+docker compose -f docker-compose.quickstart.yml up --build -d
+```
+
+Logs ansehen:
+
+```bash
+docker compose -f docker-compose.quickstart.yml logs -f
+```
+
+Stoppen:
+
+```bash
+docker compose -f docker-compose.quickstart.yml down
+```
+
+Wenn du das bestehende Repository-Compose verwenden willst, reicht auch:
 
 ```bash
 docker compose up --build
 ```
 
-App: http://127.0.0.1:8080
+---
 
-SQLite DB (persisted via Docker volume): `app-data` at `/app/data/app.db`.
+## 🗺️ App-Bereiche
 
-## App flow at a glance
+- `/` – Dashboard mit Such-, Filter- und Sortieroptionen
+- `/items/new` – Neue Kaufidee anlegen
+- `/insights` – Übersicht über Übersprünge, Ersparnisse und Top-Kategorien
+- `/settings/profile` – Stundenlohn und Benachrichtigungseinstellungen
+- `/health` – Health-Endpoint
 
-- **Dashboard (`/`)**: All captured items with status, price, "Buy after" timestamp plus search, status/tag filters and sorting
-- **Add item (`/items/new`)**: Capture a new purchase idea and set a waiting period
-- **Insights (`/insights`)**: Overview of skips, saved amount, and top categories
-- **Settings (`/settings/profile`)**: Net hourly wage and optional ntfy notification settings
+---
 
-## Running tests
+## 🧪 Tests
 
-### Go unit tests
+### Go-Tests
 
 ```bash
 go test ./...
 ```
 
-### Optional: Docker Compose integration check (MVP-008 AC1/AC2)
-
-Requires a local Docker installation:
+### Docker-Compose Integrationscheck (optional)
 
 ```bash
 RUN_DOCKER_TESTS=1 go test ./cmd/server -run TestDockerComposeAppReachableAndPersistsDataAcrossRestart -v
 ```
 
-### Playwright E2E (exploratory smoke suite)
+### Playwright E2E
 
-Install:
+Installieren:
 
 ```bash
 npm ci
 npm run setup:e2e:deps
 ```
 
-If your environment reports missing browser runtime libraries (for example `libatk-1.0.so.0`) or Chromium crashes in headless mode, run the dependency step again after `apt` metadata refresh:
-
-```bash
-sudo apt-get update
-npx playwright install --with-deps chromium
-```
-
-On Ubuntu 24.04 the package name is `libatk1.0-0t64` (not `libatk1.0-0`), and Playwright installs the correct `t64` variants automatically when using `--with-deps`.
-
-Run smoke suite:
+Smoke-Suite:
 
 ```bash
 npm run test:e2e:smoke
 ```
 
-Run monkeyish robustness suite:
+Monkeyish-Suite:
 
 ```bash
 npm run test:e2e:monkeyish
 ```
 
-The smoke suite checks:
+Alle E2E-Tests:
 
-- Navigation across pages
-- Browser console errors
-- HTTP responses with 4xx/5xx status codes
+```bash
+npm run test:e2e
+```
 
-## CI (GitHub Actions)
+---
 
-Workflow: `.github/workflows/ci.yml`
+## ⚙️ CI/CD
 
-Pipeline steps:
+- **CI Workflow** (`.github/workflows/ci.yml`)
+  - Go-Tests
+  - Node Setup + npm Install
+  - Playwright E2E
+  - Upload von Test-Artefakten
 
-1. Go setup
-2. `go test ./...`
-3. Node setup + `npm ci`
-4. Playwright browser install (Chromium)
-5. `npm run test:e2e:smoke` (with 1 retry in CI so traces are generated for flakes)
-6. Upload `playwright-report/` and `test-results/` as CI artifacts
+- **Docker Workflow** (`.github/workflows/docker.yml`)
+  - Docker Build bei Push/PR
+  - Optionales Pushen in die GitHub Container Registry (nur auf `master`)
+
+---
+
+## 📦 Docker Image lokal bauen
+
+```bash
+docker build -t impulse-pause:local .
+```
+
+```bash
+docker run --rm -p 8080:8080 impulse-pause:local
+```
+
+---
+
+## 📄 Lizenz
+
+Interne/Projekt-Lizenz nach Bedarf ergänzen.
